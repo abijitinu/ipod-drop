@@ -56,13 +56,16 @@ def _itunes_layout(path: Path) -> None:
     path.write_bytes(bytes(out))
 
 
-def create(model: str, name: str, hfs: bool = False, size_mb: int = 300, itunes_layout: bool = False) -> Path:
+def create(model: str, name: str, hfs: bool = False, size_mb: int = 300, itunes_layout: bool = False,
+           sparse: bool = False) -> Path:
+    """sparse: a full-size (e.g. 160 GB) image that only uses the space written to it."""
     IMAGES.mkdir(parents=True, exist_ok=True)
-    image = IMAGES / f"{name}.dmg"
+    image = IMAGES / f"{name}.sparseimage" if sparse else IMAGES / f"{name}.dmg"
     remove(name)
     fs = "HFS+" if hfs else "MS-DOS FAT32"
     subprocess.run(["hdiutil", "create", "-size", f"{size_mb}m", "-fs", fs, "-volname", name,
-                    "-layout", "MBRSPUD" if not hfs else "GPTSPUD", "-o", str(image)],
+                    "-layout", "MBRSPUD" if not hfs else "GPTSPUD",
+                    *(["-type", "SPARSE"] if sparse else []), "-o", str(image).removesuffix(".sparseimage")],
                    check=True, capture_output=True)
     out = subprocess.run(["hdiutil", "attach", "-nobrowse", str(image)], check=True,
                          capture_output=True, text=True).stdout
@@ -93,10 +96,13 @@ def remove(name: str) -> None:
     if mount.exists():
         subprocess.run(["hdiutil", "detach", "-force", str(mount)], capture_output=True)
     (IMAGES / f"{name}.dmg").unlink(missing_ok=True)
+    (IMAGES / f"{name}.sparseimage").unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
     if sys.argv[1] == "create":
-        print(create(sys.argv[2], sys.argv[3], hfs="--hfs" in sys.argv, itunes_layout="--itunes" in sys.argv))
+        size = next((int(a.split("=")[1]) for a in sys.argv if a.startswith("--size-mb=")), 300)
+        print(create(sys.argv[2], sys.argv[3], hfs="--hfs" in sys.argv, itunes_layout="--itunes" in sys.argv,
+                     size_mb=size, sparse="--sparse" in sys.argv))
     elif sys.argv[1] == "remove":
         remove(sys.argv[2])

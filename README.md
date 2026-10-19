@@ -6,12 +6,34 @@ iPod Drop is a native macOS app for click-wheel iPods. Drop songs on the menu ba
 
 **[Download for macOS](https://abijitinu.github.io/ipod-drop/)** · [Releases](https://github.com/abijitinu/ipod-drop/releases)
 
+![iPod Drop's library window with a song playing](docs/screenshots/library.png)
+
+## Screenshots
+
+*Screenshots use a demo library with made-up artists and silent tracks.*
+
+### Drop music from the menu bar
+
+iPod Drop sits in the macOS menu bar. Drag songs or folders onto the iPod icon to send them straight to your iPod, into any playlist, without opening a window. The popover shows the connected iPod, its free space and where the music will go.
+
+<p align="center"><img src="docs/screenshots/menu-bar.png" width="432" alt="The iPod Drop menu bar popover with a drop zone, the connected iPod and a playlist picker"></p>
+
+### Grab song info and cover art (Fix Info)
+
+Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes catalogue: title, artist, album, genre, year, track number and cover art. Matches are scored by title and song length; good matches are pre-ticked, doubtful ones are flagged, and nothing changes until you apply.
+
+![The Fix Info sheet matching messy song titles to catalogue recordings with cover art](docs/screenshots/fix-info.png)
+
+### Browse your iPod
+
+![The Albums view showing album covers from the iPod](docs/screenshots/albums.png)
+
 ## Features
 
-- **Drag and drop** onto the menu bar icon or the library window, or choose files and folders.
+- **Menu bar drop**: drag music onto the iPod icon in the menu bar (or into the library window, or choose files and folders) and pick the playlist it goes into.
 - **Any audio format**: MP3, AAC and Apple Lossless go straight on; FLAC, WAV, AIFF, Opus, OGG and others are converted automatically (lossless to Apple Lossless, lossy to 256 kbps AAC).
 - **Manage your iPod**: browse songs, albums, artists and genres; create, rename and delete playlists; edit song info and ratings; remove songs.
-- **Fix Info**: look songs up in Apple's iTunes catalogue to fix titles, artists, albums, years and cover art, with a review step before anything changes.
+- **Fix Info (grab metadata)**: look songs up in Apple's iTunes catalogue to fix titles, artists, albums, years and cover art, with a review step before anything changes.
 - **Built-in player**: play songs straight from the iPod, with Up Next, shuffle, repeat and media keys.
 - **Several iPods**: switch between connected iPods; each is shown with a photo of its exact model.
 - **Safe writes**: only one program writes to the iPod at a time, and duplicates are skipped.
@@ -58,7 +80,7 @@ tools/build_app.sh --dmg          # also packages build/iPod-Drop.dmg
 
 - `iPodDrop/`: the SwiftUI app (menu bar drop target, library window, player, Fix Info).
 - `ipod_engine/`: a small Python helper that drives [iOpenPod](https://github.com/TheRealSavi/iOpenPod)'s library engine over JSON-RPC. It is the only part that reads and writes the iPod.
-- `tools/`: build script plus end-to-end tests. `engine_write_test.py` runs against a connected iPod; `virtual_ipod.py` and `model_matrix.sh` test other models using disk images made to look like freshly restored iPods. Back up your iPod before running tests that write.
+- `tools/`: build and publish scripts, `make_demo_library.py` (the fictional demo library used for screenshots), plus end-to-end tests. `engine_write_test.py` runs against a connected iPod; `virtual_ipod.py` and `model_matrix.sh` test other models using disk images made to look like freshly restored iPods. Back up your iPod before running tests that write.
 
 ## Credits
 
