@@ -1,0 +1,3 @@
+# The iPod engine (ipod_engine/) runs on iOpenPod's library engine.
+# Pinned: ipod_engine uses some of its internal APIs; re-test after upgrading.
+iopenpod==2.0.13

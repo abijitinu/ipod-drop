@@ -1,0 +1,43 @@
+# Generate the Xcode project with: xcodegen generate
+name: iPodDrop
+options:
+  bundleIdPrefix: com.abijit
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  iPodDrop:
+    type: application
+    platform: macOS
+    sources:
+      - path: iPodDrop
+    info:
+      path: iPodDrop/Info.plist
+      properties:
+        CFBundleDisplayName: iPod Drop
+        CFBundleShortVersionString: "2.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.music
+        LSUIElement: true
+        NSHumanReadableCopyright: Built on iOpenPod (GPL-3.0)
+        # Development fallback: run the engine from this checkout's .venv when the
+        # app bundle doesn't contain its own engine.
+        IPDEngineRoot: $(SRCROOT)
+    settings:
+      base:
+        PRODUCT_NAME: iPod Drop
+        PRODUCT_BUNDLE_IDENTIFIER: com.abijit.ipoddrop
+        ENABLE_APP_SANDBOX: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
