@@ -6,21 +6,19 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.3</title>
-      <pubDate>Tue, 20 Oct 2026 10:21:52 +0000</pubDate>
-      <sparkle:version>230</sparkle:version>
-      <sparkle:shortVersionString>2.3</sparkle:shortVersionString>
+      <title>Version 2.4</title>
+      <pubDate>Tue, 20 Oct 2026 10:52:36 +0000</pubDate>
+      <sparkle:version>240</sparkle:version>
+      <sparkle:shortVersionString>2.4</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.3</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.3</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.4</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.4</h3>
 <ul>
-<li><b>Check for Updates.</b> iPod Drop now updates itself. It checks once a day, or choose iPod Drop › Check for Updates…</li>
-<li><b>Fix Info for your whole library.</b> A new Fix Info toolbar button and File › Fix Info for All Songs… (⇧⌘I) look up missing titles, artists, albums, genres, years, track numbers and cover art. Fill in only what's missing or replace everything; songs from the same album are matched together, with time left and a Stop button.</li>
-<li><b>Interrupted saves can be recovered.</b> If saving to the iPod was cut off, iPod Drop now offers Restore Previous Library or Keep Current Contents instead of getting stuck on "Opening iPod…".</li>
-<li><b>Ejecting is more reliable.</b> If macOS is briefly using the iPod, Eject retries for a few seconds and then says plainly which app is holding it.</li>
-<li><b>Clearer errors.</b> A harmless timezone note no longer hides the real reason a save failed, and error reports include the previous session's log.</li>
+<li><b>See exactly what's happening.</b> While adding, editing or removing songs, iPod Drop shows the song it's working on, how many files are done out of the total, and the percentage.</li>
+<li><b>An iTunes-style progress bar.</b> A moving striped bar shows work is continuing even when the percentage pauses.</li>
+<li><b>A fresh look.</b> The iPod Drop name and an iPod logo sit in the window's top corner, and the app uses Apple Music's red throughout.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.3/iPod-Drop-2.3.zip" sparkle:edSignature="zKAdTs1MBaKGjzoXACmtFarlNhXz78xKm8PtaIeqFqLrlDdabDnzUuzXEDEb+rTIfiPNznRhNS+KRn5my5u/DA==" length="174099360" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.4/iPod-Drop-2.4.zip" sparkle:edSignature="FRIh4ZQK6oSFhXSHgDvnGNgpzilZP7abLMI5vOcOH6orECN72bR0TgiJmAYE+B5GQKmutxcoz+iVxnjgPpyyDg==" length="174128168" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>

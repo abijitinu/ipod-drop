@@ -37,7 +37,7 @@ Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes c
 - **Built-in player**: play songs straight from the iPod, with Up Next, shuffle, repeat and media keys.
 - **Several iPods**: switch between connected iPods; each is shown with a photo of its exact model.
 - **Safe writes**: only one program writes to the iPod at a time, and duplicates are skipped.
-- **Live progress**: bulk adds, edits and deletes show what's happening with a percentage while the iPod saves.
+- **Live progress**: adds, edits and deletes show the song being worked on, how many files are done of the total and the percentage, with an iTunes-style moving striped bar.
 - **Automatic updates**: iPod Drop checks for new versions once a day (or iPod Drop › Check for Updates…) and installs them when you say so. Updates are signed, so only genuine releases install.
 - **Recovers interrupted saves**: if saving to the iPod was cut off (unplugged, crashed), iPod Drop offers to restore the previous library or keep what's there.
 - **Error reports**: Help › Send Error Report… opens an email to the developer with your Mac, iPod and app details and the app's log attached. Nothing is sent until you press Send.
