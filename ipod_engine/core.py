@@ -9,6 +9,7 @@ Ids are only valid within one library generation; clients refetch on `library.ch
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -19,6 +20,7 @@ from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, 
 from PySide6.QtGui import QImage
 
 from iOpenPod.app.context import AppContext
+from iOpenPod.app.device_controller import DeviceOperation
 from iOpenPod.app.core.settings.definitions import DRAFT_ALL_CHANGES
 from iOpenPod.app.artwork_import import import_artwork
 from iOpenPod.app.library_workspace import TrackArtworkEdit, TrackUpdate
@@ -177,6 +179,28 @@ class SaveProgress:
         return {"percent": percent, "label": label}
 
 
+# Apps that hold an iPod open, by the process names macOS reports.
+APP_NAMES = {
+    "SystemUIServer": "macOS", "Finder": "Finder", "mds": "Spotlight", "mds_stores": "Spotlight",
+    "mdworker": "Spotlight", "mdworker_shared": "Spotlight", "QuickLookUIService": "Quick Look",
+    "Music": "Music", "Photos": "Photos", "Preview": "Preview", "Terminal": "Terminal",
+}
+EJECT_RETRIES = 4
+EJECT_RETRY_MS = 2000
+
+
+def _eject_message(message: str) -> str:
+    """macOS's unmount refusal, said plainly, naming the app that holds the iPod."""
+    if "could not unmount" not in message:
+        return message
+    blocker = re.search(r"dissented by PID \d+ \(([^)]*)\)", message)
+    name = Path(blocker.group(1)).name if blocker else ""
+    app = APP_NAMES.get(name, name)
+    who = f"{app} is still using the iPod" if app else "Something on your Mac is still using the iPod"
+    return (f"{who}, so it couldn't be ejected. Close any Finder windows or files open from the iPod, "
+            "wait a few seconds and press Eject again. You can also eject it from Finder's sidebar.")
+
+
 class _ArtworkSignals(QObject):
     done = Signal(int, object, object)  # token, path or None, error text or None
 
@@ -225,6 +249,7 @@ class Engine(QObject):
         self.write: tuple[Reply, dict] | None = None  # in-flight save and its result
         self.save_progress = SaveProgress()
         self.eject_reply: Reply | None = None
+        self.eject_attempts = 0
         # Worker signals must target slots on this QObject: queued signals bound to
         # lambdas are dropped when the auto-deleted worker goes away first.
         self.art_replies: dict[int, Reply] = {}
@@ -409,11 +434,29 @@ class Engine(QObject):
 
     @Slot(object)
     def _operation_failed(self, failure) -> None:
-        detail = getattr(failure, "detail", str(failure))
-        self.emit("device.error", {"message": detail})
+        message = getattr(failure, "message", None) or str(failure)
+        if getattr(failure, "operation", None) is DeviceOperation.EJECT:
+            # macOS processes such as SystemUIServer or Spotlight often hold a
+            # volume for a moment; an unforced unmount usually succeeds shortly after.
+            if self.eject_reply and self.eject_attempts < EJECT_RETRIES and "could not unmount" in message:
+                self.eject_attempts += 1
+                logger.info("Eject refused (%s); retry %d", message.replace("\n", " "), self.eject_attempts)
+                QTimer.singleShot(EJECT_RETRY_MS, self._retry_eject)
+                return
+            message = _eject_message(message)
+        self.emit("device.error", {"message": message})
         if self.eject_reply:
             reply, self.eject_reply = self.eject_reply, None
-            reply(error=detail)
+            reply(error=message)
+
+    def _retry_eject(self) -> None:
+        if self.eject_reply is None:
+            return
+        if self.devices.busy:  # the failed attempt is still winding down
+            QTimer.singleShot(500, self._retry_eject)
+        elif not self.devices.eject_active_ipod():
+            reply, self.eject_reply = self.eject_reply, None
+            reply(error="The iPod can't be ejected right now. Try again from Finder's sidebar.")
 
     @Slot(object)
     def _eject_completed(self, completion) -> None:
@@ -427,6 +470,7 @@ class Engine(QObject):
         if not self.devices.eject_active_ipod():
             raise EngineError("The iPod can't be ejected right now.")
         self.eject_reply = reply
+        self.eject_attempts = 0
 
     # ------------------------------------------------------------ library
 
@@ -723,7 +767,13 @@ class Engine(QObject):
                 issues = self.writer.save_result.issues
             elif self.writer.review is not None:
                 issues = self.writer.review.result.issues
-            detail = _explain(issues) or "; ".join(i.message for i in issues[:3]) or state.value
+            for issue in issues:
+                logger.warning("Write issue %s [%s]: %s %s", getattr(issue, "code", "?"),
+                               getattr(getattr(issue, "severity", None), "value", "?"),
+                               issue.message, getattr(issue, "detail", "") or "")
+            # Warnings (such as the iPod's timezone note) never stop a save; name the errors.
+            errors = [i for i in issues if getattr(getattr(i, "severity", None), "value", "") != "warning"]
+            detail = _explain(issues) or "; ".join(i.message for i in errors[:3]) or state.value
             self.writer.discard_changes()
             self.emit("write.state", {"state": "failed", "message": detail})
             reply(error=f"Write failed: {detail}")

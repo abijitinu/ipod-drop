@@ -28,6 +28,8 @@ final class EngineClient {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appending(path: "engine.log")
     }()
+    /// The log from before the last start (app launch or engine restart), kept for error reports.
+    static var previousLogURL: URL { logURL.deletingLastPathComponent().appending(path: "engine-previous.log") }
 
     func start() {
         stopping = false
@@ -51,6 +53,8 @@ final class EngineClient {
         let stdin = Pipe(), stdout = Pipe()
         process.standardInput = stdin
         process.standardOutput = stdout
+        try? FileManager.default.removeItem(at: Self.previousLogURL)
+        try? FileManager.default.moveItem(at: Self.logURL, to: Self.previousLogURL)
         FileManager.default.createFile(atPath: Self.logURL.path, contents: nil)
         process.standardError = (try? FileHandle(forWritingTo: Self.logURL)) ?? FileHandle.nullDevice
         process.terminationHandler = { [weak self] finished in

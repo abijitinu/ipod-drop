@@ -298,10 +298,16 @@ final class LibraryStore {
 
     func eject() {
         PlayerController.shared.stop()  // an open file would stop the iPod from unmounting
+        let name = device.name ?? "iPod"
+        lastError = nil
+        // The engine retries for a few seconds if macOS is briefly using the iPod.
+        setActivity(Activity(phase: .saving, label: "Ejecting \(name)…"))
         Task {
             do {
                 try await engine.send("device.eject")
+                finish(.done("\(name) is ejected. You can unplug it now."))
             } catch {
+                activity = nil
                 lastError = error.localizedDescription
             }
         }

@@ -74,12 +74,21 @@ enum ErrorReport {
         return lines.joined(separator: "\n")
     }
 
-    /// The end of the engine log, with the home folder shortened to ~ so the
+    /// The end of this session's engine log and the one before it (a crash or a
+    /// relaunch starts a new log), with the home folder shortened to ~ so the
     /// report doesn't carry the account name in every path.
     private static func logAttachment() -> URL? {
-        guard let data = try? Data(contentsOf: EngineClient.logURL), let text = String(data: data, encoding: .utf8) else { return nil }
-        let tail = text.split(separator: "\n", omittingEmptySubsequences: false).suffix(3000).joined(separator: "\n")
-        let cleaned = tail.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        func tail(_ url: URL, lines: Int) -> String? {
+            guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
+            return String(decoding: data, as: UTF8.self)
+                .split(separator: "\n", omittingEmptySubsequences: false).suffix(lines).joined(separator: "\n")
+        }
+        let parts = [
+            tail(EngineClient.previousLogURL, lines: 1500).map { "=== Previous session ===\n" + $0 },
+            tail(EngineClient.logURL, lines: 3000).map { "=== This session ===\n" + $0 },
+        ].compactMap { $0 }
+        guard !parts.isEmpty else { return nil }
+        let cleaned = parts.joined(separator: "\n\n").replacingOccurrences(of: NSHomeDirectory(), with: "~")
         let url = FileManager.default.temporaryDirectory.appending(path: "iPod Drop log.txt")
         do {
             try cleaned.write(to: url, atomically: true, encoding: .utf8)

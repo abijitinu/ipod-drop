@@ -26,7 +26,7 @@ targets:
       path: iPodDrop/Info.plist
       properties:
         CFBundleDisplayName: iPod Drop
-        CFBundleShortVersionString: "2.2"
+        CFBundleShortVersionString: "2.3"
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.music
         LSUIElement: true
