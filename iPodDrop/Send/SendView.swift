@@ -33,6 +33,7 @@ struct SendView: View {
         .frame(width: 360)
         .animation(.smooth(duration: 0.25), value: store.activity)
         .animation(.smooth(duration: 0.25), value: store.device.connected)
+        .tint(.brand)
         .alert("New Playlist", isPresented: $namingPlaylist) {
             TextField("Playlist name", text: $newPlaylistName)
             Button("Cancel", role: .cancel) {}
@@ -88,7 +89,7 @@ struct SendView: View {
             VStack(spacing: 8) {
                 Image(systemName: isTargeted ? "arrow.down.circle.fill" : "arrow.down.circle")
                     .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
+                    .foregroundStyle(isTargeted ? Color.brand : .secondary)
                     .symbolEffect(.bounce, value: isTargeted)
                 Text(isTargeted ? "Release to add" : "Drop music here")
                     .font(.headline)
@@ -103,9 +104,9 @@ struct SendView: View {
         .buttonStyle(.plain)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(isTargeted ? Color.accentColor.opacity(0.12) : .clear)
+                .fill(isTargeted ? Color.brand.opacity(0.12) : .clear)
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(isTargeted ? Color.accentColor : Color.secondary.opacity(0.45),
+                .strokeBorder(isTargeted ? Color.brand : Color.secondary.opacity(0.45),
                               style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
         }
         .dropDestination(for: URL.self) { urls, _ in
@@ -230,7 +231,7 @@ struct DeviceHeader: View {
                 if store.device.connected, let total = store.device.totalBytes, let free = store.device.availableBytes {
                     ProgressView(value: store.device.usedFraction)
                         .progressViewStyle(.linear)
-                        .tint(.accentColor)
+                        .tint(.brand)
                         .frame(maxWidth: 220)
                     Text("\(Format.songs(store.device.songs ?? 0)) · \(Format.bytes(free)) free of \(Format.bytes(total))")
                         .font(.caption)
@@ -247,47 +248,64 @@ struct DeviceHeader: View {
     }
 }
 
-/// Progress or result of the current transfer: what's happening, how far along
-/// (as a bar and a percentage), or how it ended.
+/// Progress or result of the current transfer, like iTunes' sync display: what's
+/// happening, the song being worked on, how many files are done, the percentage,
+/// and a moving striped bar so it's clear work continues.
 struct ActivityRow: View {
     let activity: Activity
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 icon
                 Text(activity.title)
-                    .font(.callout)
+                    .font(.callout.weight(activity.isWorking ? .semibold : .regular))
                     .lineLimit(2)
-                    .contentTransition(.opacity)
                 Spacer(minLength: 0)
                 if activity.isWorking, let percent = activity.percentText {
                     Text(percent)
                         .font(.callout.weight(.semibold))
                         .monospacedDigit()
                         .contentTransition(.numericText())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.brand)
                 }
             }
             if activity.isWorking {
-                ProgressView(value: activity.fraction ?? 0)
-                    .progressViewStyle(.linear)
-                    .opacity(activity.fraction == nil ? 0.35 : 1)
-                    .animation(.smooth(duration: 0.3), value: activity.fraction)
+                if let item = activity.item, !item.isEmpty {
+                    Text(item)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .contentTransition(.opacity)
+                        .animation(.easeOut(duration: 0.15), value: item)
+                }
+                StripedProgressBar(fraction: activity.fraction)
+                if let count = activity.countText {
+                    Text(count)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 11)
+        .padding(.vertical, 12)
         .adaptiveGlass(in: .rect(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityValue(activity.percentText ?? "")
     }
 
     @ViewBuilder
     private var icon: some View {
         switch activity.phase {
         case .importing, .saving:
-            ProgressView().controlSize(.small)
+            Image("iPodLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 14, height: 18)
+                .foregroundStyle(.brandGradient)
+                .symbolEffect(.pulse, options: .repeating)
         case .done:
             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
         case .failed:

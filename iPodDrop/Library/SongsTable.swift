@@ -96,7 +96,7 @@ struct SongsTable: View {
         .overlay {
             if isTargeted {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.accentColor, lineWidth: 3)
+                    .strokeBorder(Color.brand, lineWidth: 3)
                     .padding(6)
                     .allowsHitTesting(false)
             }

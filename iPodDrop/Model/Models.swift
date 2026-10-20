@@ -223,6 +223,11 @@ nonisolated struct Activity: Equatable {
     var percent: Int?
     /// What the save is doing right now, e.g. "Copying to the iPod".
     var label: String?
+    /// The song being worked on, e.g. "Toxic — Britney Spears".
+    var item: String?
+    /// Files done in the current step and how many it has (saving), when known.
+    var stepDone: Int?
+    var stepTotal: Int?
 
     var isWorking: Bool {
         switch phase {
@@ -242,9 +247,22 @@ nonisolated struct Activity: Equatable {
 
     var title: String {
         switch phase {
-        case .importing: total > 0 ? "Preparing \(min(done + 1, total)) of \(total) songs" : "Preparing songs"
+        case .importing: "Preparing songs"
         case .saving: label ?? "Writing to iPod"
         case .done(let message), .failed(let message): message
+        }
+    }
+
+    /// "12 of 1,000 files" / "3 of 44 songs" for the step under way.
+    var countText: String? {
+        switch phase {
+        case .importing:
+            return total > 1 ? "\(min(done, total).formatted()) of \(total.formatted()) songs prepared" : nil
+        case .saving:
+            guard let total = stepTotal, total > 1, let done = stepDone else { return nil }
+            return "\(min(done, total).formatted()) of \(total.formatted()) files"
+        default:
+            return nil
         }
     }
 
@@ -266,7 +284,9 @@ nonisolated struct Activity: Equatable {
 nonisolated struct SendItemEvent: Decodable { var file: String; var state: String; var detail: String }
 nonisolated struct ProgressEvent: Decodable { var done: Int; var total: Int }
 nonisolated struct WriteStateEvent: Decodable { var state: String; var message: String? }
-nonisolated struct WriteProgressEvent: Decodable { var percent: Int; var label: String }
+nonisolated struct WriteProgressEvent: Decodable {
+    var percent: Int; var label: String; var item: String?; var done: Int?; var total: Int?
+}
 nonisolated struct MessageEvent: Decodable { var message: String }
 nonisolated struct QueuedEvent: Decodable { var files: Int }
 

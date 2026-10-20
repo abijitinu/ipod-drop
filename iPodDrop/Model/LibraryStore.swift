@@ -102,10 +102,14 @@ final class LibraryStore {
             setActivity(Activity(phase: .importing, done: 0, total: event.files))
         case "send.progress":
             guard let event = try? decoder.decode(ProgressEvent.self, from: data) else { return }
-            setActivity(Activity(phase: .importing, done: event.done, total: event.total))
+            setActivity(Activity(phase: .importing, done: event.done, total: event.total, item: activity?.item))
         case "send.item":
             guard let event = try? decoder.decode(SendItemEvent.self, from: data) else { return }
             let state = SendItem.State(rawValue: event.state) ?? .ready
+            if state == .converting || state == .queued, var current = activity, current.phase == .importing {
+                current.item = (event.file as NSString).deletingPathExtension  // the file being read or converted
+                activity = current
+            }
             if let index = sendLog.firstIndex(where: { $0.file == event.file && $0.state == .converting }) {
                 sendLog[index].state = state
                 sendLog[index].detail = event.detail
@@ -128,7 +132,8 @@ final class LibraryStore {
         case "write.progress":
             guard let event = try? decoder.decode(WriteProgressEvent.self, from: data),
                   activity?.phase == .saving else { return }
-            setActivity(Activity(phase: .saving, percent: event.percent, label: event.label))
+            setActivity(Activity(phase: .saving, percent: event.percent, label: event.label,
+                                 item: event.item, stepDone: event.done, stepTotal: event.total))
         case "device.error":
             if let event = try? decoder.decode(MessageEvent.self, from: data) { lastError = event.message }
         case "engine.restarting":

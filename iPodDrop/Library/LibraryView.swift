@@ -40,6 +40,7 @@ struct LibraryView: View {
             AddMusicSheet(initialTarget: currentTarget)
         }
         .modifier(LibraryDialogs(section: $section))
+        .tint(.brand)
         .onChange(of: store.infoRequest) { _, ids in
             guard let ids else { return }
             selection = ids
@@ -197,7 +198,8 @@ private struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .top, spacing: 0) { Wordmark() }
+        // The name sits in the sidebar's part of the title bar, beside the window buttons.
+        .toolbar { WordmarkToolbarItem() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // A solid bar so the playlist list scrolls under it instead of overlapping it.
             VStack(spacing: 0) {
@@ -267,22 +269,38 @@ private struct Sidebar: View {
     }
 }
 
-/// "iPod Drop" wordmark at the top of the sidebar, in the classic iPod style.
+/// The wordmark as a toolbar item, without the glass capsule macOS 26 puts behind items.
+private struct WordmarkToolbarItem: ToolbarContent {
+    var body: some ToolbarContent {
+        if #available(macOS 26, *) {
+            ToolbarItem(placement: .automatic) { Wordmark() }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .automatic) { Wordmark() }
+        }
+    }
+}
+
+/// "iPod Drop" wordmark with the iPod logo, in the sidebar's title bar, in Apple Music red.
 private struct Wordmark: View {
     var body: some View {
-        HStack(spacing: 0) {
-            Text("iPod")
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
-            Text(" Drop")
-                .font(.system(size: 22, weight: .light, design: .rounded))
-                .foregroundStyle(Color.accentColor)
-            Spacer()
+        HStack(spacing: 7) {
+            Image("iPodLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 24)
+                .foregroundStyle(.brandGradient)
+            HStack(spacing: 0) {
+                Text("iPod")
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                Text(" Drop")
+                    .font(.system(size: 18, weight: .light, design: .rounded))
+                    .foregroundStyle(Color.brand)
+            }
+            .kerning(-0.3)
         }
-        .kerning(-0.4)
-        .padding(.horizontal, 18)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
-        .accessibilityElement(children: .combine)
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("iPod Drop")
     }
 }
@@ -362,7 +380,7 @@ private struct PlaylistRow: View {
             .padding(.vertical, 1)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.accentColor, lineWidth: isTargeted ? 2 : 0)
+                    .stroke(Color.brand, lineWidth: isTargeted ? 2 : 0)
                     .padding(-3)
             )
             .onDrop(of: [.fileURL, .plainText], isTargeted: $isTargeted) { providers in

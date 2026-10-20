@@ -185,7 +185,7 @@ private struct RatingControl: View {
                     stars = (stars == value) ? 0 : value
                 } label: {
                     Image(systemName: value <= (stars ?? 0) ? "star.fill" : "star")
-                        .foregroundStyle(value <= (stars ?? 0) ? Color.accentColor : Color.secondary.opacity(mixed ? 0.3 : 0.6))
+                        .foregroundStyle(value <= (stars ?? 0) ? Color.brand : Color.secondary.opacity(mixed ? 0.3 : 0.6))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")

@@ -54,6 +54,7 @@ struct FixInfoSheet: View {
             if all.count < Self.setupThreshold { begin() }
         }
         .onDisappear { lookup?.cancel() }
+        .tint(.brand)
     }
 
     // MARK: Pieces

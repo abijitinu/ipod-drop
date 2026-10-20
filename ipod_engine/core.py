@@ -164,43 +164,27 @@ class SaveProgress:
         self.reset()
 
     def reset(self) -> None:
+        self.stage_start = 0.0
         self.percent = 0
         self.label = ""
 
     def update(self, progress: WriteProgress) -> dict | None:
+        """The overall percentage and stage name, or None for stages outside the bar."""
         stage = next((s for s in SAVE_STAGES if progress.phase.startswith(s[0])), None)
         if stage is None:  # rechecks and flushes interleave; keep the current place
             return None
         _, start, end, label = stage
         done, total = _count(progress.completed), _count(progress.total)
         fraction = min(1.0, done / total) if done is not None and total else 0.0
-        percent = max(self.percent, int(start + (end - start) * fraction))
-        if percent == self.percent and label == self.label:
-            return None  # iOpenPod repeats some stages many times; only send changes
-        self.percent, self.label = percent, label
-        return {"percent": percent, "label": label}
+        self.percent = max(self.percent, int(start + (end - start) * fraction))
+        if start >= self.stage_start:  # late echoes of earlier stages don't rename the step
+            self.stage_start, self.label = start, label
+        return {"percent": self.percent, "label": self.label}
 
 
-# Apps that hold an iPod open, by the process names macOS reports.
-APP_NAMES = {
-    "SystemUIServer": "macOS", "Finder": "Finder", "mds": "Spotlight", "mds_stores": "Spotlight",
-    "mdworker": "Spotlight", "mdworker_shared": "Spotlight", "QuickLookUIService": "Quick Look",
-    "Music": "Music", "Photos": "Photos", "Preview": "Preview", "Terminal": "Terminal",
-}
-EJECT_RETRIES = 4
-EJECT_RETRY_MS = 2000
-
-
-def _eject_message(message: str) -> str:
-    """macOS's unmount refusal, said plainly, naming the app that holds the iPod."""
-    if "could not unmount" not in message:
-        return message
-    blocker = re.search(r"dissented by PID \d+ \(([^)]*)\)", message)
-    name = Path(blocker.group(1)).name if blocker else ""
-    app = APP_NAMES.get(name, name)
-    who = f"{app} is still using the iPod" if app else "Something on your Mac is still using the iPod"
-    return (f"{who}, so it couldn't be ejected. Close any Finder windows or files open from the iPod, "
-            "wait a few seconds and press Eject again. You can also eject it from Finder's sidebar.")
+def _media_key(path: str) -> str:
+    """iPod locations come as ":iPod_Control:Music:F01:ABCD.mp3" or as paths; compare them as one."""
+    return path.replace(":", "/").strip("/").casefold()
 
 
 class _ArtworkSignals(QObject):
@@ -250,6 +234,8 @@ class Engine(QObject):
         self._settled: list = []  # replies to send once the iPod finishes reloading
         self.write: tuple[Reply, dict] | None = None  # in-flight save and its result
         self.save_progress = SaveProgress()
+        self.save_names: dict[str, str] = {}  # iPod file -> "Title — Artist", for the current save
+        self._last_progress: dict | None = None
         self.eject_reply: Reply | None = None
         self.eject_attempts = 0
         # Worker signals must target slots on this QObject: queued signals bound to
@@ -799,6 +785,12 @@ class Engine(QObject):
             return
         self.write = (reply, result)
         self.save_progress.reset()
+        self._last_progress = None
+        # Songs on the iPod and in this draft (removed ones are only in the former).
+        active = self.devices.active_ipod
+        tracks = (*(active.library.tracks if active else ()), *self.workspace.tracks)
+        self.save_names = {_media_key(t.metadata.location): " — ".join(x for x in (t.title, t.artist) if x)
+                           for t in tracks if t.metadata.location}
         self.emit("write.state", {"state": "saving"})
         self._emit_device()
         if self.ctx.settings.get(DRAFT_ALL_CHANGES):
@@ -844,10 +836,25 @@ class Engine(QObject):
         QTimer.singleShot(0, self._pump_send)
 
     def _write_progress(self, progress: WriteProgress) -> None:
+        """Forward save progress: overall percent, stage, the song being worked on and
+        how many files of the stage are done, so people can see it moving."""
         if self.write is None:
             return
         update = self.save_progress.update(progress)
-        if update is not None:
+        if update is None:
+            return
+        item = ""
+        if progress.current_item:
+            key = _media_key(progress.current_item)
+            item = self.save_names.get(key) or (Path(key).name if "/music/" in f"/{key}" else "")
+        done, total = _count(progress.completed), _count(progress.total)
+        counted = progress.unit == "files" or progress.phase.startswith(
+            ("save.storage.staging", "save.storage.publishing", "save.media_deletion"))
+        update |= {"item": item or None,
+                   "done": done if counted and total else None,
+                   "total": total if counted and total else None}
+        if update != self._last_progress:  # iOpenPod repeats some stages many times
+            self._last_progress = update
             self.emit("write.progress", update)
 
     def shutdown(self) -> None:

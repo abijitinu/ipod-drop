@@ -30,6 +30,7 @@ struct AddMusicSheet: View {
         .padding(22)
         .frame(width: 520)
         .onAppear { target = initialTarget }
+        .tint(.brand)
         .animation(.smooth(duration: 0.2), value: items)
         .alert("New Playlist", isPresented: $namingPlaylist) {
             TextField("Playlist name", text: $newPlaylistName)
@@ -61,7 +62,7 @@ struct AddMusicSheet: View {
         VStack(spacing: 10) {
             Image(systemName: isTargeted ? "arrow.down.circle.fill" : "square.and.arrow.down.on.square")
                 .font(.system(size: 38, weight: .light))
-                .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
+                .foregroundStyle(isTargeted ? Color.brand : .secondary)
                 .symbolEffect(.bounce, value: isTargeted)
             Text(isTargeted ? "Release to add" : "Drag songs or folders here")
                 .font(.headline)
@@ -75,9 +76,9 @@ struct AddMusicSheet: View {
         .frame(maxWidth: .infinity, minHeight: items.isEmpty ? 190 : 120)
         .background {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(isTargeted ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.04))
+                .fill(isTargeted ? Color.brand.opacity(0.10) : Color.secondary.opacity(0.04))
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(isTargeted ? Color.accentColor : Color.secondary.opacity(0.4),
+                .strokeBorder(isTargeted ? Color.brand : Color.secondary.opacity(0.4),
                               style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
         }
         .dropDestination(for: URL.self) { urls, _ in

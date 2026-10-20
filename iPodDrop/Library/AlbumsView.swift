@@ -95,7 +95,7 @@ private struct AlbumDetail: View {
                     .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(album.title).font(.largeTitle.weight(.bold)).lineLimit(2)
-                    Text(album.owner).font(.title3).foregroundStyle(Color.accentColor)
+                    Text(album.owner).font(.title3).foregroundStyle(Color.brand)
                     Text([album.year > 0 ? String(album.year) : nil,
                           Format.songs(tracks.count),
                           Format.longDuration(ms: tracks.reduce(0) { $0 + $1.lengthMs })]

@@ -55,7 +55,7 @@ struct NowPlayingBar: View {
         HStack(spacing: 22) {
             Button { player.shuffle.toggle() } label: {
                 Image(systemName: "shuffle")
-                    .foregroundStyle(player.shuffle ? Color.accentColor : .secondary)
+                    .foregroundStyle(player.shuffle ? Color.brand : .secondary)
             }
             .help(player.shuffle ? "Shuffle is on" : "Shuffle is off")
             Button(action: player.previous) { Image(systemName: "backward.fill") }
@@ -79,7 +79,7 @@ struct NowPlayingBar: View {
                 }
             } label: {
                 Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                    .foregroundStyle(player.repeatMode == .off ? .secondary : Color.accentColor)
+                    .foregroundStyle(player.repeatMode == .off ? .secondary : Color.brand)
             }
             .help(repeatHelp)
         }
@@ -125,7 +125,7 @@ struct NowPlayingBar: View {
         return HStack(spacing: 10) {
             Button { showQueue.toggle() } label: { Image(systemName: "list.bullet") }
                 .buttonStyle(.plain)
-                .foregroundStyle(showQueue ? Color.accentColor : .secondary)
+                .foregroundStyle(showQueue ? Color.brand : .secondary)
                 .help("Up Next")
                 .popover(isPresented: $showQueue, arrowEdge: .top) { UpNextView() }
             Image(systemName: "speaker.fill").font(.caption).foregroundStyle(.secondary)
