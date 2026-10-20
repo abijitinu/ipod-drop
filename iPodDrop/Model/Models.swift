@@ -188,17 +188,22 @@ nonisolated enum SendTarget: Hashable {
 /// The current Send or save operation, for progress UI.
 nonisolated struct Activity: Equatable {
     enum Phase: Equatable {
+        /// Reading and converting dropped files, before anything is written.
         case importing
+        /// Writing the library to the iPod.
         case saving
         case done(String)
         case failed(String)
     }
 
     var phase: Phase
+    /// Files prepared so far (importing).
     var done = 0
     var total = 0
-    /// Overrides the default title while working.
-    var message: String?
+    /// Overall progress of the save, 0...100 (saving).
+    var percent: Int?
+    /// What the save is doing right now, e.g. "Copying to the iPod".
+    var label: String?
 
     var isWorking: Bool {
         switch phase {
@@ -207,25 +212,32 @@ nonisolated struct Activity: Equatable {
         }
     }
 
+    /// 0...1 when the amount of work is known.
     var fraction: Double? {
-        guard case .importing = phase, total > 0 else { return nil }
-        return Double(done) / Double(total)
+        switch phase {
+        case .importing: total > 0 ? Double(min(done, total)) / Double(total) : nil
+        case .saving: percent.map { Double($0) / 100 }
+        default: nil
+        }
     }
 
     var title: String {
-        if let message, isWorking { return message }
-        return switch phase {
-        case .importing: total > 0 ? "Preparing \(min(done + 1, total)) of \(total)…" : "Preparing…"
-        case .saving: "Writing to iPod…"
+        switch phase {
+        case .importing: total > 0 ? "Preparing \(min(done + 1, total)) of \(total) songs" : "Preparing songs"
+        case .saving: label ?? "Writing to iPod"
         case .done(let message), .failed(let message): message
         }
+    }
+
+    /// "42%" while working, when known.
+    var percentText: String? {
+        fraction.map { "\(Int(($0 * 100).rounded()))%" }
     }
 
     /// Short text for the menu bar badge.
     var badge: String {
         switch phase {
-        case .importing: total > 0 ? "\(done)/\(total)" : "…"
-        case .saving: "Saving"
+        case .importing, .saving: percentText ?? "…"
         case .done: "✓"
         case .failed: "!"
         }
@@ -235,6 +247,7 @@ nonisolated struct Activity: Equatable {
 nonisolated struct SendItemEvent: Decodable { var file: String; var state: String; var detail: String }
 nonisolated struct ProgressEvent: Decodable { var done: Int; var total: Int }
 nonisolated struct WriteStateEvent: Decodable { var state: String; var message: String? }
+nonisolated struct WriteProgressEvent: Decodable { var percent: Int; var label: String }
 nonisolated struct MessageEvent: Decodable { var message: String }
 nonisolated struct QueuedEvent: Decodable { var files: Int }
 

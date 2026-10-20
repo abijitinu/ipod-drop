@@ -22,7 +22,11 @@ final class LibraryStore {
     var sendTarget: SendTarget = .library
     private(set) var activity: Activity?
     private(set) var sendLog: [SendItem] = []
-    var lastError: String?
+    var lastError: String? {
+        didSet { if let lastError { record(lastError) } }
+    }
+    /// The last few problems, for error reports.
+    private(set) var recentErrors: [(date: Date, message: String)] = []
     /// Shows the Add Music sheet in the library window (toolbar +, ⌘O, popover click).
     var showAddMusic = false
     // Requests from any right-click menu, presented by the library window.
@@ -112,7 +116,7 @@ final class LibraryStore {
         case "write.state":
             guard let event = try? decoder.decode(WriteStateEvent.self, from: data) else { return }
             switch event.state {
-            case "saving": setActivity(Activity(phase: .saving))
+            case "saving": setActivity(Activity(phase: .saving, percent: 0))
             case "failed": finish(.failed(event.message ?? "Couldn't write to the iPod."))
             case "saved":
                 // Ends every save, including deletes, renames and info edits. (A send's
@@ -121,6 +125,10 @@ final class LibraryStore {
                 finish(.done("Saved. Eject the iPod to see the changes on it."))
             default: break
             }
+        case "write.progress":
+            guard let event = try? decoder.decode(WriteProgressEvent.self, from: data),
+                  activity?.phase == .saving else { return }
+            setActivity(Activity(phase: .saving, percent: event.percent, label: event.label))
         case "device.error":
             if let event = try? decoder.decode(MessageEvent.self, from: data) { lastError = event.message }
         case "engine.restarting":
@@ -209,7 +217,13 @@ final class LibraryStore {
         activity = value
     }
 
+    private func record(_ message: String) {
+        recentErrors.append((Date(), message))
+        if recentErrors.count > 20 { recentErrors.removeFirst(recentErrors.count - 20) }
+    }
+
     private func finish(_ phase: Activity.Phase) {
+        if case .failed(let message) = phase { record(message) }
         activity = Activity(phase: phase)
         clearActivityTask?.cancel()
         clearActivityTask = Task {

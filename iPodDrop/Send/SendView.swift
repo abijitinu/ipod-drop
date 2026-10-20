@@ -186,6 +186,7 @@ struct SendView: View {
                         .disabled(store.isBusy)
                 }
                 SettingsLink { Label("Settings…", systemImage: "gearshape") }
+                Button("Send Error Report…", systemImage: "envelope") { ErrorReport.compose() }
                 Divider()
                 Button("Quit iPod Drop") { NSApp.terminate(nil) }
             } label: {
@@ -239,33 +240,52 @@ struct DeviceHeader: View {
     }
 }
 
-/// Progress or result of the current transfer, as a glass capsule.
+/// Progress or result of the current transfer: what's happening, how far along
+/// (as a bar and a percentage), or how it ended.
 struct ActivityRow: View {
     let activity: Activity
 
     var body: some View {
-        HStack(spacing: 10) {
-            switch activity.phase {
-            case .importing, .saving:
-                if let fraction = activity.fraction {
-                    ProgressView(value: fraction).progressViewStyle(.circular).controlSize(.small)
-                } else {
-                    ProgressView().controlSize(.small)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 10) {
+                icon
+                Text(activity.title)
+                    .font(.callout)
+                    .lineLimit(2)
+                    .contentTransition(.opacity)
+                Spacer(minLength: 0)
+                if activity.isWorking, let percent = activity.percentText {
+                    Text(percent)
+                        .font(.callout.weight(.semibold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .foregroundStyle(.secondary)
                 }
-            case .done:
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-            case .failed:
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             }
-            Text(activity.title)
-                .font(.callout)
-                .lineLimit(2)
-                .contentTransition(.numericText())
-            Spacer(minLength: 0)
+            if activity.isWorking {
+                ProgressView(value: activity.fraction ?? 0)
+                    .progressViewStyle(.linear)
+                    .opacity(activity.fraction == nil ? 0.35 : 1)
+                    .animation(.smooth(duration: 0.3), value: activity.fraction)
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .adaptiveGlass(in: .capsule)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .adaptiveGlass(in: .rect(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(activity.percentText ?? "")
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        switch activity.phase {
+        case .importing, .saving:
+            ProgressView().controlSize(.small)
+        case .done:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        }
     }
 }
 
@@ -276,8 +296,17 @@ struct ErrorBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
-            Text(message).font(.callout).fixedSize(horizontal: false, vertical: true)
+            // A long engine message must never push the window taller than the screen.
+            Text(message)
+                .font(.callout)
+                .lineLimit(4)
+                .textSelection(.enabled)
+                .help(message)
             Spacer(minLength: 0)
+            Button("Report…") { ErrorReport.compose(problem: message) }
+                .buttonStyle(.borderless)
+                .font(.callout)
+                .help("Email this problem and the app's log to the developer")
             Button("Dismiss", systemImage: "xmark") { store.lastError = nil }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)

@@ -11,7 +11,12 @@ struct FixInfoSheet: View {
     @State private var lookup: Task<Void, Never>?
     @State private var applying = false
     @State private var applyStatus = ""
+    /// Cover art downloads done, as 0...1 (the first part of applying).
+    @State private var downloadFraction = 0.0
     @State private var fields = Fields()
+    /// Fixed when the sheet opens, from the room in the library window.
+    @State private var size = SheetSize.fitting(CGSize(width: 900, height: 640),
+                                                minimum: CGSize(width: 700, height: 380))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -23,11 +28,11 @@ struct FixInfoSheet: View {
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
-            .frame(minHeight: 320)
+            .frame(maxHeight: .infinity)
             footer
         }
         .padding(20)
-        .frame(width: 860, height: 640)
+        .frame(width: size.width, height: size.height)
         .onAppear(perform: start)
         .onDisappear { lookup?.cancel() }
     }
@@ -74,10 +79,16 @@ struct FixInfoSheet: View {
                 case nil: if row.state == .done { c.none += 1 }
                 }
             }
-            Text("\(counts.high) good · \(counts.other) to check · \(counts.none) not found")
-                .font(.caption).foregroundStyle(.secondary)
-            if !applyStatus.isEmpty {
-                Text(applyStatus).font(.caption).foregroundStyle(.secondary)
+            if applying {
+                ProgressView(value: applyFraction)
+                    .progressViewStyle(.linear)
+                    .frame(width: 180)
+                Text("\(applyStatus) \(Int((applyFraction * 100).rounded()))%")
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+            } else {
+                Text("\(counts.high) good · \(counts.other) to check · \(counts.none) not found")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Button("Cancel", role: .cancel) { dismiss() }
@@ -94,6 +105,12 @@ struct FixInfoSheet: View {
     private var searching: Bool { rows.contains { $0.state == .waiting || $0.state == .searching } }
     private var done: Int { rows.filter { $0.state != .waiting && $0.state != .searching }.count }
     private var chosen: [Row] { rows.filter { $0.include && $0.selected != nil } }
+
+    /// Downloading cover art is the first 40%, writing to the iPod the rest.
+    private var applyFraction: Double {
+        guard let activity = store.activity, activity.phase == .saving else { return downloadFraction * 0.4 }
+        return 0.4 + 0.6 * (activity.fraction ?? 0)
+    }
 
     private func start() {
         rows = trackIDs.compactMap { store.tracksByID[$0] }.map { Row(track: $0) }
@@ -131,6 +148,8 @@ struct FixInfoSheet: View {
     private func apply() {
         lookup?.cancel()
         applying = true
+        downloadFraction = 0
+        applyStatus = fields.artwork ? "Getting cover art…" : "Preparing…"
         let rowsToApply = chosen
         let fields = fields
         Task {
@@ -142,7 +161,6 @@ struct FixInfoSheet: View {
                 guard let song = row.selected?.song else { continue }
                 var item: [String: Any] = ["id": row.track.id, "fields": fields.changes(from: song, to: row.track)]
                 if fields.artwork, let url = song.artworkURL {
-                    applyStatus = "Downloading cover art \(n + 1) of \(rowsToApply.count)…"
                     if let (data, _) = try? await URLSession.shared.data(from: url) {
                         let file = artworkDir.appending(path: "\(song.trackId).jpg")
                         if (try? data.write(to: file)) != nil { item["artworkPath"] = file.path }
@@ -151,6 +169,7 @@ struct FixInfoSheet: View {
                 if (item["fields"] as? [String: Any])?.isEmpty == false || item["artworkPath"] != nil {
                     items.append(item)
                 }
+                downloadFraction = Double(n + 1) / Double(rowsToApply.count)
             }
             applyStatus = "Saving to the iPod…"
             let ok = items.isEmpty ? true : await store.editMany(items)

@@ -37,6 +37,8 @@ Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes c
 - **Built-in player**: play songs straight from the iPod, with Up Next, shuffle, repeat and media keys.
 - **Several iPods**: switch between connected iPods; each is shown with a photo of its exact model.
 - **Safe writes**: only one program writes to the iPod at a time, and duplicates are skipped.
+- **Live progress**: bulk adds, edits and deletes show what's happening with a percentage while the iPod saves.
+- **Error reports**: Help › Send Error Report… opens an email to the developer with your Mac, iPod and app details and the app's log attached. Nothing is sent until you press Send.
 
 ## Supported iPods
 
@@ -80,7 +82,7 @@ tools/build_app.sh --dmg          # also packages build/iPod-Drop.dmg
 
 - `iPodDrop/`: the SwiftUI app (menu bar drop target, library window, player, Fix Info).
 - `ipod_engine/`: a small Python helper that drives [iOpenPod](https://github.com/TheRealSavi/iOpenPod)'s library engine over JSON-RPC. It is the only part that reads and writes the iPod.
-- `tools/`: build and publish scripts, `make_demo_library.py` (the fictional demo library used for screenshots), plus end-to-end tests. `engine_write_test.py` runs against a connected iPod; `virtual_ipod.py` and `model_matrix.sh` test other models using disk images made to look like freshly restored iPods. Back up your iPod before running tests that write.
+- `tools/`: build and publish scripts, `make_demo_library.py` (the fictional demo library used for screenshots), plus end-to-end tests. `engine_write_test.py` runs against a connected iPod; `engine_bulk_test.py` checks bulk add, edit, cover art, playlist and delete operations (and their progress) on a simulated iPod; `virtual_ipod.py` and `model_matrix.sh` test other models using disk images made to look like freshly restored iPods. Back up your iPod before running tests that write.
 
 ## Credits
 

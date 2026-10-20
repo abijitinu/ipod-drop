@@ -76,6 +76,7 @@ struct InspectorView: View {
                     .disabled(draft == original || saving || store.editBlocker != nil)
             }
             .padding(14)
+            .background(.bar)  // fields scroll underneath; keep the buttons readable
         }
     }
 

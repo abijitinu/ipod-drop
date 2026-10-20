@@ -17,6 +17,13 @@ struct SettingsView: View {
             } footer: {
                 Text("iPod Drop starts in the menu bar so you can drop music without opening the library.")
             }
+            Section {
+                LabeledContent("Something not working?") {
+                    Button("Send Error Report…") { ErrorReport.compose() }
+                }
+            } footer: {
+                Text("Opens an email to the developer with details about your Mac, the iPod and the app's log. You can read it before sending.")
+            }
             Section("Engine") {
                 LabeledContent("Status", value: engineStatus)
                 LabeledContent("Log") {

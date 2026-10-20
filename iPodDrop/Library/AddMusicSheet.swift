@@ -12,6 +12,8 @@ struct AddMusicSheet: View {
     @State private var isTargeted = false
     @State private var namingPlaylist = false
     @State private var newPlaylistName = ""
+    /// Room for the list of staged files, so the sheet always fits the window.
+    @State private var listHeight = min(150, max(56, SheetSize.available.height - 440))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -70,7 +72,7 @@ struct AddMusicSheet: View {
                 .glassButtonStyle()
                 .padding(.top, 4)
         }
-        .frame(maxWidth: .infinity, minHeight: 190)
+        .frame(maxWidth: .infinity, minHeight: items.isEmpty ? 190 : 120)
         .background {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(isTargeted ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.04))
@@ -115,7 +117,7 @@ struct AddMusicSheet: View {
                     }
                 }
             }
-            .frame(maxHeight: 150)
+            .frame(maxHeight: listHeight)
             .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 10))
         }
     }

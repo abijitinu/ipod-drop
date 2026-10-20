@@ -22,7 +22,8 @@ from iOpenPod.app.context import AppContext
 from iOpenPod.app.core.settings.definitions import DRAFT_ALL_CHANGES
 from iOpenPod.app.artwork_import import import_artwork
 from iOpenPod.app.library_workspace import TrackArtworkEdit, TrackUpdate
-from iOpenPod.app.library_write_controller import PreparationState
+from iOpenPod.app.library_write import WriteProgress
+from iOpenPod.app.library_write_controller import LibraryWriteController, PreparationState
 from iOpenPod.app.models.artwork import ArtworkRequest
 from iPodDB.library.editing import TrackFieldEdit
 from iPodDB.library.playlists import PlaylistKind
@@ -107,6 +108,75 @@ def _explain(issues) -> str:
     return ""
 
 
+def _count(value) -> int | None:
+    # iOpenPod sometimes reports counts pre-formatted ("1,234").
+    try:
+        return int(str(value).replace(",", "")) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _forward_write_progress(controller: LibraryWriteController, callback: Callable[[WriteProgress], None]) -> None:
+    """Pass iOpenPod's structured save progress on to `callback`.
+
+    The controller only re-emits the message text (progressChanged), not the stage
+    counts, so wrap its progress slot. It stays a method of the controller, so the
+    queued connection from the worker keeps a living receiver.
+    """
+    original = LibraryWriteController._progress
+
+    def progress(self, token: int, value: object) -> None:
+        original(self, token, value)
+        if self is controller and token == self._token and isinstance(value, WriteProgress):
+            callback(value)
+
+    LibraryWriteController._progress = progress
+
+
+# Where each iOpenPod save stage sits in one overall 0-100 bar, and what to call it.
+# Stages report their own done/total; the bar moves through the stage's range.
+SAVE_STAGES: tuple[tuple[str, float, float, str], ...] = (
+    ("source.", 0, 4, "Checking the library"),
+    ("draft.", 0, 4, "Checking the library"),
+    ("resources.", 4, 6, "Checking the library"),
+    ("database.", 6, 25, "Updating the iPod's library"),
+    ("save.source_check", 25, 26, "Updating the iPod's library"),
+    ("save.storage_transaction", 26, 27, "Copying to the iPod"),
+    ("save.storage.staging", 27, 60, "Copying to the iPod"),
+    ("save.storage.prepared", 60, 62, "Checking copied files"),
+    ("save.storage.verifying_staged", 62, 70, "Checking copied files"),
+    ("save.storage.publishing", 70, 85, "Saving"),
+    ("save.storage.verifying_recovery", 85, 90, "Verifying"),
+    ("save.storage.committed", 90, 92, "Verifying"),
+    ("save.cleanup", 92, 94, "Finishing up"),
+    ("save.media_deletion", 94, 100, "Removing song files"),
+)
+
+
+class SaveProgress:
+    """Turns iOpenPod's per-stage progress into one percentage that only moves forward."""
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self.percent = 0
+        self.label = ""
+
+    def update(self, progress: WriteProgress) -> dict | None:
+        stage = next((s for s in SAVE_STAGES if progress.phase.startswith(s[0])), None)
+        if stage is None:  # rechecks and flushes interleave; keep the current place
+            return None
+        _, start, end, label = stage
+        done, total = _count(progress.completed), _count(progress.total)
+        fraction = min(1.0, done / total) if done is not None and total else 0.0
+        percent = max(self.percent, int(start + (end - start) * fraction))
+        if percent == self.percent and label == self.label:
+            return None  # iOpenPod repeats some stages many times; only send changes
+        self.percent, self.label = percent, label
+        return {"percent": percent, "label": label}
+
+
 class _ArtworkSignals(QObject):
     done = Signal(int, object, object)  # token, path or None, error text or None
 
@@ -153,6 +223,7 @@ class Engine(QObject):
         self._last_device: dict | None = None
         self._settled: list = []  # replies to send once the iPod finishes reloading
         self.write: tuple[Reply, dict] | None = None  # in-flight save and its result
+        self.save_progress = SaveProgress()
         self.eject_reply: Reply | None = None
         # Worker signals must target slots on this QObject: queued signals bound to
         # lambdas are dropped when the auto-deleted worker goes away first.
@@ -168,6 +239,7 @@ class Engine(QObject):
         self.devices.operationFailed.connect(self._operation_failed)
         self.devices.ejectCompleted.connect(self._eject_completed)
         self.writer.changed.connect(self._writer_changed)
+        _forward_write_progress(self.writer, self._write_progress)
         self.devices.restore_previous_device()
         self.devices.start_auto_refresh()
         # Plugging in an iPod that never mounts produces no discovery change; poll USB.
@@ -621,6 +693,7 @@ class Engine(QObject):
             QTimer.singleShot(0, self._pump_send)
             return
         self.write = (reply, result)
+        self.save_progress.reset()
         self.emit("write.state", {"state": "saving"})
         self._emit_device()
         if self.ctx.settings.get(DRAFT_ALL_CHANGES):
@@ -658,6 +731,13 @@ class Engine(QObject):
             return
         self._emit_device()
         QTimer.singleShot(0, self._pump_send)
+
+    def _write_progress(self, progress: WriteProgress) -> None:
+        if self.write is None:
+            return
+        update = self.save_progress.update(progress)
+        if update is not None:
+            self.emit("write.progress", update)
 
     def shutdown(self) -> None:
         self.import_pool.waitForDone()

@@ -31,6 +31,9 @@ struct iPodDropApp: App {
                 Button("Volume Down") { PlayerController.shared.volume = max(0, PlayerController.shared.volume - 0.1) }
                     .keyboardShortcut(.downArrow, modifiers: .command)
             }
+            CommandGroup(after: .help) {
+                Button("Send Error Report…") { ErrorReport.compose() }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Add Music to iPod…") { app.chooseFiles() }
                     .keyboardShortcut("o")
@@ -83,9 +86,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if libraryWindow == nil {
             let host = NSHostingController(rootView: LibraryView())
             host.sceneBridgingOptions = [.toolbars, .title]
+            // The window's size is the person's choice. By default the hosting
+            // controller resizes the window to the content's ideal size whenever the
+            // content changes, and a song table's ideal height is every row: after a
+            // delete or an edit the window grew taller than the screen, pushing the
+            // bottom bar and centred dialogs off screen. Only `minSize` below applies.
+            host.sizingOptions = []
             let window = NSWindow(contentViewController: host)
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             window.toolbarStyle = .unified
+            window.tabbingMode = .disallowed  // one library window; no tab bar menu items
             window.title = "iPod Drop"
             window.setContentSize(NSSize(width: 1180, height: 740))
             window.minSize = NSSize(width: 860, height: 520)
@@ -95,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.setFrameAutosaveName("LibraryWindow")
             libraryWindow = window
         }
+        libraryWindow?.fitToScreen()
         NSApp.setActivationPolicy(.regular)
         libraryWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate()
@@ -109,5 +120,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func chooseFiles() {
         showLibrary()
         store.showAddMusic = true
+    }
+}
+
+extension NSWindow {
+    /// Keep the whole window on its screen. A frame saved on a bigger display, or
+    /// grown by an older version, would otherwise hide the bottom of the window.
+    func fitToScreen() {
+        guard !styleMask.contains(.fullScreen), let visible = (screen ?? NSScreen.main)?.visibleFrame else { return }
+        var frame = self.frame
+        frame.size.width = min(frame.width, visible.width)
+        frame.size.height = min(frame.height, visible.height)
+        frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+        if frame != self.frame { setFrame(frame, display: true) }
     }
 }
