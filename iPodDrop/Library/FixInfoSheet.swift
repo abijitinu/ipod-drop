@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Look songs up in Apple's iTunes catalogue and apply the info you approve:
-/// title, artist, album, genre, year, track number and cover art.
+/// title, artist, album, genre, year, track and disc numbers, and cover art.
+/// Works for a few songs or the whole library; big runs start with a short setup.
 struct FixInfoSheet: View {
     private let store = LibraryStore.shared
     @Environment(\.dismiss) private var dismiss
@@ -9,31 +10,49 @@ struct FixInfoSheet: View {
 
     @State private var rows: [Row] = []
     @State private var lookup: Task<Void, Never>?
+    @State private var started = false
+    @State private var stopped = false
+    @State private var startedAt = Date()
     @State private var applying = false
     @State private var applyStatus = ""
     /// Cover art downloads done, as 0...1 (the first part of applying).
     @State private var downloadFraction = 0.0
     @State private var fields = Fields()
+    /// Leave out songs that already have every detail (setup step).
+    @State private var skipComplete = true
     /// Fixed when the sheet opens, from the room in the library window.
     @State private var size = SheetSize.fitting(CGSize(width: 900, height: 640),
                                                 minimum: CGSize(width: 700, height: 380))
 
+    /// From this many songs on, the sheet asks how to run before it starts searching.
+    static let setupThreshold = 10
+
+    private var tracks: [Track] { trackIDs.compactMap { store.tracksByID[$0] } }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            fieldToggles
-            List {
-                ForEach($rows) { $row in
-                    FixInfoRow(row: $row)
+            if started {
+                fieldToggles
+                List {
+                    ForEach($rows) { $row in
+                        FixInfoRow(row: $row)
+                    }
                 }
+                .listStyle(.inset(alternatesRowBackgrounds: true))
+                .frame(maxHeight: .infinity)
+                footer
+            } else {
+                setup
             }
-            .listStyle(.inset(alternatesRowBackgrounds: true))
-            .frame(maxHeight: .infinity)
-            footer
         }
         .padding(20)
         .frame(width: size.width, height: size.height)
-        .onAppear(perform: start)
+        .onAppear {
+            let all = tracks
+            fields.onlyEmpty = all.count >= Self.setupThreshold  // whole-library runs fill gaps by default
+            if all.count < Self.setupThreshold { begin() }
+        }
         .onDisappear { lookup?.cancel() }
     }
 
@@ -47,17 +66,72 @@ struct FixInfoSheet: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
-            if searching {
-                ProgressView(value: Double(done), total: Double(max(rows.count, 1)))
-                    .frame(width: 140)
-                Text("\(done) of \(rows.count)").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+            if started, searching {
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 8) {
+                        ProgressView(value: Double(done), total: Double(max(rows.count, 1)))
+                            .frame(width: 160)
+                        Text("\(done) of \(rows.count)").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                        Button("Stop") { stop() }
+                            .controlSize(.small)
+                            .help("Stop searching. Songs found so far can still be applied.")
+                    }
+                    if let remaining = timeRemaining {
+                        Text(remaining).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Before a big run: which songs, what to change, and roughly how long it takes.
+    private var setup: some View {
+        let all = tracks
+        let incomplete = all.filter { !$0.hasCompleteInfo }
+        let count = skipComplete ? incomplete.count : all.count
+        return VStack(alignment: .leading, spacing: 18) {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    Picker("Songs", selection: $skipComplete) {
+                        Text("Only songs missing details (\(incomplete.count))").tag(true)
+                        Text("All \(all.count) songs").tag(false)
+                    }
+                    .pickerStyle(.radioGroup)
+                    Divider()
+                    Picker("Update", selection: $fields.onlyEmpty) {
+                        Text("Only fill in missing details").tag(true)
+                        Text("Replace details with Apple's").tag(false)
+                    }
+                    .pickerStyle(.radioGroup)
+                    Text(fields.onlyEmpty
+                         ? "Titles, artists and other details you already have stay as they are; empty ones are filled in."
+                         : "Every ticked detail is replaced with Apple's version when a match is found.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Divider()
+                    fieldToggles
+                }
+                .padding(8)
+            }
+            Label(Self.estimate(songs: count), systemImage: "clock")
+                .font(.callout).foregroundStyle(.secondary)
+            Text("Apple limits how fast songs can be looked up. Songs from the same album are matched together, so albums go faster. You can stop at any time and apply what's been found.")
+                .font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Look Up \(count) Song\(count == 1 ? "" : "s")") { begin() }
+                    .glassProminentButtonStyle()
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(count == 0)
             }
         }
     }
 
     private var fieldToggles: some View {
         HStack(spacing: 14) {
-            Text("Change:").foregroundStyle(.secondary)
+            Text(fields.onlyEmpty ? "Fill in:" : "Change:").foregroundStyle(.secondary)
             Toggle("Title", isOn: $fields.title)
             Toggle("Artist", isOn: $fields.artist)
             Toggle("Album", isOn: $fields.album)
@@ -87,7 +161,8 @@ struct FixInfoSheet: View {
                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                     .contentTransition(.numericText())
             } else {
-                Text("\(counts.high) good · \(counts.other) to check · \(counts.none) not found")
+                Text("\(counts.high) good · \(counts.other) to check · \(counts.none) not found"
+                     + (stopped && waiting > 0 ? " · \(waiting) not searched" : ""))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -102,8 +177,9 @@ struct FixInfoSheet: View {
 
     // MARK: State
 
-    private var searching: Bool { rows.contains { $0.state == .waiting || $0.state == .searching } }
+    private var searching: Bool { !stopped && rows.contains { $0.state == .waiting || $0.state == .searching } }
     private var done: Int { rows.filter { $0.state != .waiting && $0.state != .searching }.count }
+    private var waiting: Int { rows.filter { $0.state == .waiting }.count }
     private var chosen: [Row] { rows.filter { $0.include && $0.selected != nil } }
 
     /// Downloading cover art is the first 40%, writing to the iPod the rest.
@@ -112,23 +188,58 @@ struct FixInfoSheet: View {
         return 0.4 + 0.6 * (activity.fraction ?? 0)
     }
 
-    private func start() {
-        rows = trackIDs.compactMap { store.tracksByID[$0] }.map { Row(track: $0) }
-        lookup = Task { await runLookups() }
+    /// "About 12 min left", from the pace so far (needs a few songs to be meaningful).
+    private var timeRemaining: String? {
+        let finished = done
+        guard finished >= 3, rows.count > finished else { return nil }
+        let perSong = Date().timeIntervalSince(startedAt) / Double(finished)
+        return "About " + Self.duration(perSong * Double(rows.count - finished)) + " left"
     }
 
-    private func runLookups() async {
+    /// Up-front guess: one or two searches per song, fewer when albums match together.
+    static func estimate(songs: Int) -> String {
+        songs == 0 ? "Every song already has its details." : "Takes up to " + duration(Double(songs) * 4.5)
+    }
+
+    static func duration(_ seconds: Double) -> String {
+        let minutes = Int((seconds / 60).rounded(.up))
+        if minutes <= 1 { return "about a minute" }
+        if minutes < 60 { return "about \(minutes) min" }
+        return "about \(minutes / 60) h \(minutes % 60) min"
+    }
+
+    private func begin() {
+        let chosenTracks = tracks.count >= Self.setupThreshold && skipComplete
+            ? tracks.filter { !$0.hasCompleteInfo } : tracks
+        rows = chosenTracks.map { Row(track: $0) }
+        started = true
+        stopped = false
+        startedAt = Date()
+        // How many of these songs share each album, so the lookup knows when
+        // fetching a whole album's track list saves searches.
+        var albumSizes: [String: Int] = [:]
+        for track in chosenTracks { albumSizes[ITunesLookup.albumKey(track), default: 0] += 1 }
+        lookup = Task { await runLookups(albumSizes: albumSizes) }
+    }
+
+    private func stop() {
+        stopped = true
+        lookup?.cancel()
+        for index in rows.indices where rows[index].state == .searching { rows[index].state = .waiting }
+    }
+
+    private func runLookups(albumSizes: [String: Int]) async {
         for index in rows.indices {
             if Task.isCancelled { return }
-            await search(index)
+            await search(index, albumSize: albumSizes[ITunesLookup.albumKey(rows[index].track)] ?? 1)
         }
     }
 
-    fileprivate func search(_ index: Int, query: String? = nil) async {
+    fileprivate func search(_ index: Int, query: String? = nil, albumSize: Int = 1) async {
         guard rows.indices.contains(index) else { return }
         rows[index].state = .searching
         do {
-            let matches = try await ITunesLookup.shared.matches(for: rows[index].track, query: query)
+            let matches = try await ITunesLookup.shared.matches(for: rows[index].track, query: query, albumSize: albumSize)
             guard rows.indices.contains(index) else { return }
             rows[index].matches = Array(matches.prefix(6))
             rows[index].selection = matches.first.map(\.song.trackId)
@@ -146,7 +257,7 @@ struct FixInfoSheet: View {
     // MARK: Apply
 
     private func apply() {
-        lookup?.cancel()
+        stop()
         applying = true
         downloadFraction = 0
         applyStatus = fields.artwork ? "Getting cover art…" : "Preparing…"
@@ -157,14 +268,16 @@ struct FixInfoSheet: View {
             let artworkDir = FileManager.default.temporaryDirectory
                 .appending(path: "iPodDrop-artwork-\(UUID().uuidString)", directoryHint: .isDirectory)
             try? FileManager.default.createDirectory(at: artworkDir, withIntermediateDirectories: true)
+            var covers: [URL: String] = [:]  // songs on one album share one download
             for (n, row) in rowsToApply.enumerated() {
                 guard let song = row.selected?.song else { continue }
                 var item: [String: Any] = ["id": row.track.id, "fields": fields.changes(from: song, to: row.track)]
-                if fields.artwork, let url = song.artworkURL {
-                    if let (data, _) = try? await URLSession.shared.data(from: url) {
+                if fields.wantsArtwork(for: row.track), let url = song.artworkURL {
+                    if covers[url] == nil, let (data, _) = try? await URLSession.shared.data(from: url) {
                         let file = artworkDir.appending(path: "\(song.trackId).jpg")
-                        if (try? data.write(to: file)) != nil { item["artworkPath"] = file.path }
+                        if (try? data.write(to: file)) != nil { covers[url] = file.path }
                     }
+                    item["artworkPath"] = covers[url]
                 }
                 if (item["fields"] as? [String: Any])?.isEmpty == false || item["artworkPath"] != nil {
                     items.append(item)
@@ -182,21 +295,34 @@ struct FixInfoSheet: View {
 
     struct Fields {
         var title = true, artist = true, album = true, genre = true, year = true, trackNumber = true, artwork = true
+        /// Only fill details that are empty now; never overwrite what's there.
+        var onlyEmpty = false
+
+        func wantsArtwork(for track: Track) -> Bool {
+            artwork && (!onlyEmpty || track.artworkId == 0)
+        }
 
         /// Engine field values from the match that differ from the song now.
         func changes(from song: ITunesSong, to track: Track) -> [String: Any] {
             var out: [String: Any] = [:]
             func put(_ key: String, _ new: String?, _ old: String) {
-                if let new, !new.isEmpty, new != old { out[key] = new }
+                guard let new, !new.isEmpty, new != old else { return }
+                if onlyEmpty, !Track.isMissing(old) { return }
+                out[key] = new
             }
             func put(_ key: String, _ new: Int?, _ old: Int) {
-                if let new, new > 0, new != old { out[key] = new }
+                guard let new, new > 0, new != old else { return }
+                if onlyEmpty, old > 0 { return }
+                out[key] = new
             }
             if title { put("title", song.trackName, track.title) }
             if artist { put("artist", song.artistName, track.artist) }
             if album {
                 put("album", song.collectionName, track.album)
                 put("albumArtist", song.collectionArtistName ?? song.artistName, track.albumArtist)
+                if song.isCompilation, !track.compilation, !onlyEmpty || track.albumArtist.isEmpty {
+                    out["compilation"] = true
+                }
             }
             if genre { put("genre", song.primaryGenreName, track.genre) }
             if year { put("year", song.year, track.year) }

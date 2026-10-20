@@ -24,6 +24,7 @@ from iOpenPod.app.device_controller import DeviceOperation
 from iOpenPod.app.core.settings.definitions import DRAFT_ALL_CHANGES
 from iOpenPod.app.artwork_import import import_artwork
 from iOpenPod.app.library_workspace import TrackArtworkEdit, TrackUpdate
+from iOpenPod.app.sync_controller import SyncController
 from iOpenPod.app.library_write import WriteProgress
 from iOpenPod.app.library_write_controller import LibraryWriteController, PreparationState
 from iOpenPod.app.models.artwork import ArtworkRequest
@@ -66,6 +67,7 @@ READINESS_TEXT = {
     "database_missing": "This iPod has no music library yet. Restore or set it up with Finder first.",
     "database_unsupported": "This iPod's music library format isn't supported.",
     "inspection_failed": "This iPod couldn't be read.",
+    "sync_recovery_required": "An earlier change to this iPod didn't finish.",
 }
 
 
@@ -257,6 +259,19 @@ class Engine(QObject):
         self.current_send: tuple | None = None  # (revision, playlist_id, new_name, reply)
         self.send_queue: list[tuple[list[Path], str | None, str | None, Reply]] = []
 
+        # Interrupted saves leave a recovery journal on the iPod, and iOpenPod won't
+        # open the iPod until someone chooses to restore or keep. Its sync controller
+        # owns that choice (the sync service itself is never used here).
+        coordinator = context.device_coordinator
+        self.recovery = SyncController(
+            None, self.workspace, self.devices, context.settings, self,
+            recovery=coordinator.recover_sync_journal,
+            keep_contents=coordinator.keep_sync_contents,
+            cleanup=coordinator.cleanup_sync_journal,
+        )
+        self.recovery.changed.connect(self._recovery_changed)
+        self.recovery_reply: Reply | None = None
+
         self.devices.discoveryChanged.connect(self._discovery_changed)
         self.devices.activeIPodChanged.connect(self._active_changed)
         self.devices.busyChanged.connect(self._idle_changed)
@@ -276,6 +291,7 @@ class Engine(QObject):
             "device.status": lambda p, r: r(self._device_json()),
             "device.eject": self.eject,
             "device.select": self.select,
+            "device.recover": self.recover,
             "library.snapshot": lambda p, r: r(self.snapshot()),
             "library.artwork": self.artwork,
             "send.add": self.send_add,
@@ -313,6 +329,7 @@ class Engine(QObject):
             "searching": self.devices.searching,
             "busy": self.devices.busy or self.importing or self.write is not None,
             "otherWriter": _other_writer_running(),
+            "recovery": self._recovery_json(),
         } | self._devices_json(active)
         if active is None:
             return base
@@ -404,11 +421,55 @@ class Engine(QObject):
         iOpenPod also reopens the last-used iPod itself; this covers a first run and
         the case where the last-used iPod is gone.
         """
-        if self.devices.active_ipod is not None or self.devices.busy:
-            return
+        if self.devices.active_ipod is not None or self.devices.busy or self.recovery.needs_recovery:
+            return  # a pending recovery choice is the person's to make
         usable = [c for c in self.devices.discovery.candidates if c.selectable]
         if len(usable) == 1:
             self.devices.select_device(usable[0].id.value)
+
+    # ------------------------------------------------------------ recovery
+
+    def _recovery_json(self) -> dict[str, Any] | None:
+        if not (self.recovery.needs_recovery or self.recovery.busy or self.recovery_reply):
+            return None
+        return {"busy": self.recovery.busy, "error": self.recovery.last_error or None}
+
+    def recover(self, params: dict, reply: Reply) -> None:
+        """Answer an interrupted save: "restore" puts back the library from before it,
+        "keep" leaves the iPod as it is now (recovery copies stay on the iPod)."""
+        choice = params.get("choice")
+        if not self.recovery.needs_recovery:
+            raise EngineError("This iPod has nothing to recover.")
+        if self.recovery_reply is not None:
+            raise EngineError("Recovery is already running.")
+        started = self.recovery.recover() if choice == "restore" else (
+            self.recovery.keep_current_contents() if choice == "keep" else None)
+        if started is None:
+            raise EngineError("Choose restore or keep.")
+        if not started:
+            raise EngineError(self.recovery.last_error or "Recovery can't start right now.")
+        self.recovery_reply = reply
+        self._emit_device()
+
+    @Slot()
+    def _recovery_changed(self) -> None:
+        self._emit_device()
+        if self.recovery.busy or self.recovery_reply is None:
+            return
+        reply, self.recovery_reply = self.recovery_reply, None
+        result = self.recovery.result
+        status = getattr(getattr(result, "status", None), "value", "")
+        if self.recovery.needs_recovery:
+            issues = getattr(result, "issues", ())
+            message = "; ".join(i.message for i in issues[:2]) or "Recovery didn't finish."
+            logger.warning("Recovery failed: %s", message)
+            reply(error=message)
+            return
+        logger.info("Recovery finished: %s", status)
+        if self.recovery.needs_cleanup:
+            self.recovery.cleanup()  # remove the verified recovery copies to free space
+        reply({"status": status})
+        QTimer.singleShot(0, self._auto_select)  # reopen if the iPod needs a manual reload
 
     def select(self, params: dict, reply: Reply) -> None:
         candidate_id = str(params["id"])

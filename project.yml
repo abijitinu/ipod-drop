@@ -5,6 +5,10 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.4
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -22,18 +26,29 @@ targets:
     platform: macOS
     sources:
       - path: iPodDrop
+    dependencies:
+      - package: Sparkle
     info:
       path: iPodDrop/Info.plist
       properties:
         CFBundleDisplayName: iPod Drop
         CFBundleShortVersionString: "2.3"
-        CFBundleVersion: "1"
+        # Sparkle compares this number to decide whether an update is newer: raise it
+        # with every release (2.3 -> 230).
+        CFBundleVersion: "230"
         LSApplicationCategoryType: public.app-category.music
         LSUIElement: true
         NSHumanReadableCopyright: Built on iOpenPod (GPL-3.0)
         # Development fallback: run the engine from this checkout's .venv when the
         # app bundle doesn't contain its own engine.
         IPDEngineRoot: $(SRCROOT)
+        # In-app updates (Sparkle): the feed is published with the website.
+        SUFeedURL: https://abijitinu.github.io/ipod-drop/appcast.xml
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
+        # Updates must be signed with the matching private key (login Keychain,
+        # account "ipod-drop", created by Sparkle's generate_keys).
+        SUPublicEDKey: MXfMKXe6WGhySGdtkUi1d1BkukJe5/XJ8FYMJpeCnFc=
     settings:
       base:
         PRODUCT_NAME: iPod Drop

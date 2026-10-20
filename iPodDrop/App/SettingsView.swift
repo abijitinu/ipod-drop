@@ -5,6 +5,7 @@ struct SettingsView: View {
     private let store = LibraryStore.shared
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @State private var autoUpdate = AppDelegate.shared?.updater.updater.automaticallyChecksForUpdates ?? true
 
     var body: some View {
         Form {
@@ -16,6 +17,19 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text("iPod Drop starts in the menu bar so you can drop music without opening the library.")
+            }
+            Section {
+                Toggle("Check for updates automatically", isOn: $autoUpdate)
+                    .onChange(of: autoUpdate) { _, on in
+                        AppDelegate.shared?.updater.updater.automaticallyChecksForUpdates = on
+                    }
+                LabeledContent("Version \(ErrorReport.appVersion)") {
+                    Button("Check Now") { AppDelegate.shared?.checkForUpdates() }
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("iPod Drop checks once a day and asks before installing a new version.")
             }
             Section {
                 LabeledContent("Something not working?") {

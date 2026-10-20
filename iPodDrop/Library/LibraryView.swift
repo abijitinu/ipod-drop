@@ -124,9 +124,29 @@ struct LibraryView: View {
                 .disabled(!store.device.connected || store.isBusy)
         }
         ToolbarItem(placement: .primaryAction) {
+            Button("Fix Info", systemImage: "wand.and.sparkles") { fixInfo() }
+                .help(selection.isEmpty ? "Look up song info and cover art for every song here"
+                                        : "Look up song info and cover art for the selected songs")
+                .disabled(store.editBlocker != nil || store.tracks.isEmpty)
+        }
+        ToolbarItem(placement: .primaryAction) {
             Button("Info", systemImage: "info.circle") { showInspector.toggle() }
                 .help("Show song info")
         }
+    }
+
+    /// The selected songs, or everything in the current view (filtered by search).
+    private func fixInfo() {
+        if !selection.isEmpty {
+            store.fixInfoRequest = Array(selection)
+            return
+        }
+        let shown: [Track] = switch section ?? .songs {
+        case .playlist(let id): store.playlist(id: id).map { store.tracks(in: $0) } ?? []
+        case .recentlyAdded: Array(store.tracks.sorted { $0.dateAdded > $1.dateAdded }.prefix(200))
+        default: store.tracks
+        }
+        store.fixInfoRequest = filtered(shown).map(\.id)
     }
 
     @ViewBuilder

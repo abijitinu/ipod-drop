@@ -1,3 +1,4 @@
+import Sparkle
 import SwiftUI
 
 @main
@@ -9,6 +10,9 @@ struct iPodDropApp: App {
             SettingsView()
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { app.checkForUpdates() }
+            }
             CommandMenu("Controls") {
                 // Space also toggles while the song list has focus (not in text fields).
                 Button("Play/Pause") { PlayerController.shared.togglePlayPause() }
@@ -39,6 +43,9 @@ struct iPodDropApp: App {
                     .keyboardShortcut("o")
                 Button("Show Library") { app.showLibrary() }
                     .keyboardShortcut("l")
+                Divider()
+                Button("Fix Info for All Songs…") { app.fixAllInfo() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
             }
         }
     }
@@ -49,10 +56,16 @@ struct iPodDropApp: App {
 /// library window is open.
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let store = LibraryStore.shared
+    /// In-app updates: checks the appcast on the website daily and on request.
+    let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     private var statusItem: StatusItemController?
     private var libraryWindow: NSWindow?
 
+    /// For views outside the SwiftUI scene (menu bar popover, Settings) that need the updater.
+    private(set) static weak var shared: AppDelegate?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.shared = self
         statusItem = StatusItemController(
             store: store,
             openLibrary: { [weak self] in self?.showLibrary() },
@@ -115,6 +128,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard (notification.object as? NSWindow) === libraryWindow else { return }
         // Back to a menu bar-only app; the engine keeps running for drops.
         DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
+    }
+
+    func checkForUpdates() {
+        NSApp.activate()  // a menu bar app's update window would otherwise open behind others
+        updater.checkForUpdates(nil)
+    }
+
+    /// Look up details and cover art for the whole library (the sheet asks how first).
+    func fixAllInfo() {
+        showLibrary()
+        guard store.editBlocker == nil, !store.tracks.isEmpty else { return }
+        store.fixInfoRequest = store.tracks.map(\.id)
     }
 
     func chooseFiles() {

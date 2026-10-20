@@ -141,7 +141,13 @@ struct SendView: View {
 
     @ViewBuilder
     private var disconnected: some View {
-        if store.device.devices.filter(\.ready).count > 1 {
+        if store.device.recovery != nil {
+            Label("An earlier change to your iPod didn't finish. Open the library to restore it.",
+                  systemImage: "arrow.uturn.backward.circle")
+                .font(.callout)
+                .padding(12)
+                .adaptiveGlass(in: .rect(cornerRadius: 14), tint: .orange.opacity(0.12))
+        } else if store.device.devices.filter(\.ready).count > 1 {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Choose an iPod").font(.headline)
                 ForEach(store.device.devices.filter(\.ready)) { device in
@@ -186,6 +192,7 @@ struct SendView: View {
                         .disabled(store.isBusy)
                 }
                 SettingsLink { Label("Settings…", systemImage: "gearshape") }
+                Button("Check for Updates…", systemImage: "arrow.down.circle") { AppDelegate.shared?.checkForUpdates() }
                 Button("Send Error Report…", systemImage: "envelope") { ErrorReport.compose() }
                 Divider()
                 Button("Quit iPod Drop") { NSApp.terminate(nil) }

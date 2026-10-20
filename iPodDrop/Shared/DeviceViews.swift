@@ -168,6 +168,8 @@ struct DeviceStateView: View {
             }
         } else if store.engine.state == .starting {
             ProgressView("Starting…").controlSize(.large)
+        } else if let recovery = device.recovery {
+            RecoveryView(state: recovery, image: ready.first?.image)
         } else if ready.count > 1 {
             VStack(spacing: 6) {
                 Text("Choose an iPod").font(.title2.weight(.semibold))
@@ -194,6 +196,49 @@ struct DeviceStateView: View {
                 .foregroundStyle(.secondary)
         } else {
             NoDeviceView()
+        }
+    }
+}
+
+/// An earlier save to the iPod was interrupted (unplugged, crashed, or failed while
+/// writing). iOpenPod keeps the iPod closed until someone decides what to do.
+private struct RecoveryView: View {
+    private let store = LibraryStore.shared
+    let state: RecoveryState
+    let image: String?
+
+    var body: some View {
+        VStack(spacing: 18) {
+            DeviceImage(path: image, size: 110)
+            VStack(spacing: 8) {
+                Text("An Earlier Change Didn't Finish").font(.title2.weight(.semibold))
+                Text("Saving to this iPod was interrupted, so it can't open until you choose what to do. Restoring puts back the library exactly as it was before that change; songs already on the iPod stay.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 460)
+            }
+            if state.busy {
+                ProgressView("Recovering… don't unplug the iPod")
+            } else {
+                HStack(spacing: 12) {
+                    Button("Keep Current Contents") { store.recover(.keep) }
+                        .glassButtonStyle()
+                        .help("Leave the iPod as it is now. Its recovery copies stay on the iPod.")
+                    Button("Restore Previous Library") { store.recover(.restore) }
+                        .glassProminentButtonStyle()
+                        .keyboardShortcut(.defaultAction)
+                }
+                .controlSize(.large)
+            }
+            if let error = state.error ?? store.lastError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                Button("Send Error Report…") { ErrorReport.compose(problem: error) }
+                    .buttonStyle(.link)
+            }
         }
     }
 }

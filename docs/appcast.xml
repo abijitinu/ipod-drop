@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>iPod Drop</title>
+    <link>https://abijitinu.github.io/ipod-drop/</link>
+    <description>Updates for iPod Drop</description>
+    <language>en</language>
+    <item>
+      <title>Version 2.3</title>
+      <pubDate>Tue, 20 Oct 2026 10:21:52 +0000</pubDate>
+      <sparkle:version>230</sparkle:version>
+      <sparkle:shortVersionString>2.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.3</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.3</h3>
+<ul>
+<li><b>Check for Updates.</b> iPod Drop now updates itself. It checks once a day, or choose iPod Drop › Check for Updates…</li>
+<li><b>Fix Info for your whole library.</b> A new Fix Info toolbar button and File › Fix Info for All Songs… (⇧⌘I) look up missing titles, artists, albums, genres, years, track numbers and cover art. Fill in only what's missing or replace everything; songs from the same album are matched together, with time left and a Stop button.</li>
+<li><b>Interrupted saves can be recovered.</b> If saving to the iPod was cut off, iPod Drop now offers Restore Previous Library or Keep Current Contents instead of getting stuck on "Opening iPod…".</li>
+<li><b>Ejecting is more reliable.</b> If macOS is briefly using the iPod, Eject retries for a few seconds and then says plainly which app is holding it.</li>
+<li><b>Clearer errors.</b> A harmless timezone note no longer hides the real reason a save failed, and error reports include the previous session's log.</li>
+</ul>]]></description>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.3/iPod-Drop-2.3.zip" sparkle:edSignature="zKAdTs1MBaKGjzoXACmtFarlNhXz78xKm8PtaIeqFqLrlDdabDnzUuzXEDEb+rTIfiPNznRhNS+KRn5my5u/DA==" length="174099360" type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>

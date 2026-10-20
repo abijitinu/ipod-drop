@@ -36,6 +36,18 @@ nonisolated struct Track: Decodable, Identifiable, Hashable {
     var albumOwner: String { albumArtist.isEmpty ? displayArtist : albumArtist }
     var stars: Int { rating / 20 }
 
+    /// Placeholder text counts as missing ("Unknown Artist", "Track 01" and the like).
+    static func isMissing(_ value: String) -> Bool {
+        let v = value.trimmingCharacters(in: .whitespaces).lowercased()
+        return v.isEmpty || v.hasPrefix("unknown") || v == "untitled" || v.range(of: #"^track ?\d+$"#, options: .regularExpression) != nil
+    }
+
+    /// Has everything Fix Info can fill in: names, genre, year, track number and cover art.
+    var hasCompleteInfo: Bool {
+        !Self.isMissing(title) && !Self.isMissing(artist) && !Self.isMissing(album) && !Self.isMissing(genre)
+            && year > 0 && trackNumber > 0 && artworkId > 0
+    }
+
 }
 
 nonisolated struct Playlist: Decodable, Identifiable, Hashable {
@@ -68,6 +80,8 @@ nonisolated struct DeviceStatus: Decodable, Equatable {
     var totalBytes: Int64?
     var availableBytes: Int64?
     var generation: Int?
+    /// An earlier save to this iPod didn't finish; it opens once you restore or keep.
+    var recovery: RecoveryState?
 
     static let disconnected = DeviceStatus(connected: false, searching: true, busy: false, otherWriter: false,
                                            devices: [], unmounted: [])
@@ -84,6 +98,11 @@ nonisolated struct DeviceStatus: Decodable, Equatable {
         guard let total = totalBytes, let free = availableBytes, total > 0 else { return 0 }
         return Double(total - free) / Double(total)
     }
+}
+
+nonisolated struct RecoveryState: Decodable, Equatable {
+    var busy: Bool
+    var error: String?
 }
 
 nonisolated struct DeviceInfo: Decodable, Equatable, Identifiable {

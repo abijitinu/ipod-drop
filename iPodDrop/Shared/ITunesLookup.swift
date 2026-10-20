@@ -3,6 +3,7 @@ import Foundation
 /// One song from Apple's iTunes Search API.
 nonisolated struct ITunesSong: Decodable, Hashable, Identifiable, Sendable {
     let trackId: Int
+    let collectionId: Int?
     let trackName: String
     let artistName: String
     let collectionName: String?
@@ -19,6 +20,7 @@ nonisolated struct ITunesSong: Decodable, Hashable, Identifiable, Sendable {
     var id: Int { trackId }
     var year: Int? { releaseDate.flatMap { Int($0.prefix(4)) } }
     var isSingle: Bool { collectionName?.hasSuffix("- Single") ?? false }
+    var isCompilation: Bool { collectionArtistName?.caseInsensitiveCompare("Various Artists") == .orderedSame }
 
     /// Apple serves any size by rewriting the URL; 600×600 suits the iPod and the app.
     var artworkURL: URL? {
@@ -51,8 +53,21 @@ actor ITunesLookup {
     private let spacing: TimeInterval = 3.1
     private let country = (Locale.current.region?.identifier ?? "US").lowercased()
 
+    /// Track lists of albums already matched, by Apple's album id.
+    private var albums: [Int: [ITunesSong]] = [:]
+    /// Which Apple album each library album turned out to be.
+    private var albumForKey: [String: Int] = [:]
+
     /// Best matches for a track, best first (empty when nothing plausible).
-    func matches(for track: Track, query override: String? = nil) async throws -> [ITunesMatch] {
+    /// `albumSize` is how many of the songs being looked up share this track's album:
+    /// once one of them matches, the album's whole track list is fetched in a single
+    /// request and the rest are matched against it without searching.
+    func matches(for track: Track, query override: String? = nil, albumSize: Int = 1) async throws -> [ITunesMatch] {
+        let key = Self.albumKey(track)
+        if override == nil, let id = albumForKey[key], let songs = albums[id] {
+            let local = Self.ranked(songs, for: track)
+            if local.first?.confidence == .high { return local }
+        }
         var seen = Set<Int>()
         var scored: [ITunesMatch] = []
         for query in override.map({ [$0] }) ?? Self.queries(for: track) {
@@ -67,14 +82,45 @@ actor ITunesLookup {
             }
             if scored.contains(where: { $0.confidence == .high }) { break }
         }
-        return scored.filter { $0.score > 0 }.sorted { $0.score > $1.score }
+        let ranked = scored.filter { $0.score > 0 }.sorted { $0.score > $1.score }
+        if albumSize > 1, !key.isEmpty, albumForKey[key] == nil,
+           let best = ranked.first, best.confidence == .high, let id = best.song.collectionId {
+            albumForKey[key] = id
+            if albums[id] == nil, let songs = try? await albumTracks(id) { albums[id] = songs }
+        }
+        return ranked
+    }
+
+    /// Library album identity: album name plus album artist (or artist). Empty when unknown.
+    static func albumKey(_ track: Track) -> String {
+        guard !Track.isMissing(track.album) else { return "" }
+        return (clean(track.album) + "|" + track.albumOwner).lowercased()
+    }
+
+    private static func ranked(_ songs: [ITunesSong], for track: Track) -> [ITunesMatch] {
+        songs.map { ITunesMatch(song: $0, score: score($0, against: track)) }
+            .filter { $0.score > 0 }.sorted { $0.score > $1.score }
+    }
+
+    /// Every song on one album, in one request.
+    private func albumTracks(_ collectionId: Int) async throws -> [ITunesSong] {
+        for storefront in [country, "in"] {
+            var components = URLComponents(string: "https://itunes.apple.com/lookup")!
+            components.queryItems = [
+                URLQueryItem(name: "id", value: String(collectionId)),
+                URLQueryItem(name: "entity", value: "song"),
+                URLQueryItem(name: "country", value: storefront),
+            ]
+            let data = try await fetch(components.url!)
+            // The first result describes the album itself; keep the songs.
+            let items = (try? JSONDecoder().decode(LookupResponse.self, from: data).results) ?? []
+            let songs = items.compactMap(\.song)
+            if !songs.isEmpty { return songs }
+        }
+        return []
     }
 
     private func search(_ term: String, country: String) async throws -> [ITunesSong] {
-        let wait = spacing - Date().timeIntervalSince(lastRequest)
-        if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
-        lastRequest = Date()
-
         var components = URLComponents(string: "https://itunes.apple.com/search")!
         components.queryItems = [
             URLQueryItem(name: "term", value: term),
@@ -83,15 +129,31 @@ actor ITunesLookup {
             URLQueryItem(name: "limit", value: "15"),
             URLQueryItem(name: "country", value: country),
         ]
-        let (data, response) = try await URLSession.shared.data(from: components.url!)
+        let data = try await fetch(components.url!)
+        return (try? JSONDecoder().decode(Response.self, from: data).results) ?? []
+    }
+
+    /// One request, spaced to stay under Apple's limit; a 403/429 waits a minute and retries once.
+    private func fetch(_ url: URL) async throws -> Data {
+        let wait = spacing - Date().timeIntervalSince(lastRequest)
+        if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
+        lastRequest = Date()
+        let (data, response) = try await URLSession.shared.data(from: url)
         if let http = response as? HTTPURLResponse, [403, 429].contains(http.statusCode) {
-            // Rate limited: back off, then try once more.
             try await Task.sleep(for: .seconds(60))
             lastRequest = Date()
-            let (retry, _) = try await URLSession.shared.data(from: components.url!)
-            return (try? JSONDecoder().decode(Response.self, from: retry).results) ?? []
+            return try await URLSession.shared.data(from: url).0
         }
-        return (try? JSONDecoder().decode(Response.self, from: data).results) ?? []
+        return data
+    }
+
+    /// Lookup results mix the album and its songs; songs decode, the album doesn't.
+    private struct LookupResponse: Decodable {
+        let results: [Item]
+        struct Item: Decodable {
+            let song: ITunesSong?
+            init(from decoder: Decoder) throws { song = try? ITunesSong(from: decoder) }
+        }
     }
 
     private struct Response: Decodable { let results: [ITunesSong] }

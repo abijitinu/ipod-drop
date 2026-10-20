@@ -19,7 +19,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>2.3</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>230</string>
 	<key>IPDEngineRoot</key>
 	<string>$(SRCROOT)</string>
 	<key>LSApplicationCategoryType</key>
@@ -28,5 +28,13 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Built on iOpenPod (GPL-3.0)</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://abijitinu.github.io/ipod-drop/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>MXfMKXe6WGhySGdtkUi1d1BkukJe5/XJ8FYMJpeCnFc=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

@@ -284,6 +284,22 @@ final class LibraryStore {
         await perform("tracks.remove", ["ids": Array(trackIDs)])
     }
 
+    enum RecoveryChoice: String { case restore, keep }
+
+    /// Answer an interrupted save so the iPod can open again.
+    func recover(_ choice: RecoveryChoice) {
+        lastError = nil
+        Task {
+            do {
+                try await engine.send("device.recover", ["choice": choice.rawValue])
+                finish(.done(choice == .restore ? "Restored the iPod's library from before the unfinished change."
+                                                : "Kept the iPod as it is."))
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
     /// Open a different connected iPod. The library reloads through `library.changed`.
     func selectDevice(_ device: DeviceInfo) {
         guard !device.active else { return }
