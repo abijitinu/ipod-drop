@@ -102,7 +102,7 @@ struct DeviceProblemsView: View {
             }
             .padding(14)
             .frame(maxWidth: compact ? .infinity : 520, alignment: .leading)
-            .glassEffect(.regular.tint(.orange.opacity(0.10)), in: .rect(cornerRadius: 16))
+            .adaptiveGlass(in: .rect(cornerRadius: 16), tint: .orange.opacity(0.10))
         }
     }
 }
@@ -132,7 +132,7 @@ struct DeviceChooser: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+                .adaptiveGlass(in: .rect(cornerRadius: 18), interactive: true)
             }
         }
     }
@@ -222,7 +222,7 @@ private struct NoDeviceView: View {
             .font(.callout)
             .foregroundStyle(.secondary)
             .padding(14)
-            .glassEffect(.regular, in: .rect(cornerRadius: 14))
+            .adaptiveGlass(in: .rect(cornerRadius: 14))
         }
     }
 }

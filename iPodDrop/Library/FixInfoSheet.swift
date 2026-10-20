@@ -83,7 +83,7 @@ struct FixInfoSheet: View {
             Button("Cancel", role: .cancel) { dismiss() }
                 .keyboardShortcut(.cancelAction)
             Button(applying ? "Applying…" : "Apply to \(chosen.count) Song\(chosen.count == 1 ? "" : "s")", action: apply)
-                .buttonStyle(.glassProminent)
+                .glassProminentButtonStyle()
                 .keyboardShortcut(.defaultAction)
                 .disabled(chosen.isEmpty || applying || store.editBlocker != nil)
         }

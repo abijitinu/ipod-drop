@@ -71,7 +71,7 @@ struct InspectorView: View {
                     .help("Look these songs up in the iTunes catalogue")
                 Spacer()
                 Button(saving ? "Saving…" : "Save to iPod", action: save)
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
                     .keyboardShortcut("s")
                     .disabled(draft == original || saving || store.editBlocker != nil)
             }

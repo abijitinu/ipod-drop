@@ -67,7 +67,7 @@ struct AddMusicSheet: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button("Choose Files or Folders…", systemImage: "folder", action: choose)
-                .buttonStyle(.glass)
+                .glassButtonStyle()
                 .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, minHeight: 190)
@@ -154,7 +154,7 @@ struct AddMusicSheet: View {
                 store.send(items, to: target)
                 dismiss()
             }
-            .buttonStyle(.glassProminent)
+            .glassProminentButtonStyle()
             .keyboardShortcut(.defaultAction)
             .disabled(items.isEmpty || store.editBlocker != nil)
         }

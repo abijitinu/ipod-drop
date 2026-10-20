@@ -11,7 +11,7 @@ struct SendView: View {
     @State private var newPlaylistName = ""
 
     var body: some View {
-        GlassEffectContainer(spacing: 12) {
+        AdaptiveGlassContainer(spacing: 12) {
             VStack(alignment: .leading, spacing: 14) {
                 DeviceHeader()
                 if store.device.connected {
@@ -78,7 +78,7 @@ struct SendView: View {
                       systemImage: store.sendTarget == .library ? "music.note.house" : "music.note.list")
             }
             .menuStyle(.button)
-            .buttonStyle(.glass)
+            .glassButtonStyle()
             .fixedSize()
         }
     }
@@ -154,7 +154,7 @@ struct SendView: View {
                             Spacer()
                         }
                     }
-                    .buttonStyle(.glass)
+                    .glassButtonStyle()
                 }
             }
         } else if !store.device.problems.isEmpty {
@@ -178,7 +178,7 @@ struct SendView: View {
     private var footer: some View {
         HStack {
             Button("Open Library", systemImage: "music.note.list", action: openLibrary)
-                .buttonStyle(.glass)
+                .glassButtonStyle()
             Spacer()
             Menu {
                 if store.device.connected {
@@ -193,7 +193,7 @@ struct SendView: View {
             }
             .menuStyle(.button)
             .menuIndicator(.hidden)
-            .buttonStyle(.glass)
+            .glassButtonStyle()
             .fixedSize()
         }
     }
@@ -265,7 +265,7 @@ struct ActivityRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassEffect(.regular, in: .capsule)
+        .adaptiveGlass(in: .capsule)
     }
 }
 
@@ -283,6 +283,6 @@ struct ErrorBanner: View {
                 .buttonStyle(.borderless)
         }
         .padding(12)
-        .glassEffect(.regular.tint(.orange.opacity(0.15)), in: .rect(cornerRadius: 14))
+        .adaptiveGlass(in: .rect(cornerRadius: 14), tint: .orange.opacity(0.15))
     }
 }

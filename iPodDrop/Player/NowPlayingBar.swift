@@ -22,7 +22,7 @@ struct NowPlayingBar: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20, style: .continuous))
+        .adaptiveGlass(in: .rect(cornerRadius: 20, style: .continuous))
         .padding(.horizontal, 14)
         .padding(.bottom, 12)
     }

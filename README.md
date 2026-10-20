@@ -60,11 +60,11 @@ Both Mac-formatted and Windows-formatted iPods work. If an iPod only charges and
 2. The app isn't notarized by Apple yet, so the first time you open it macOS will block it. Open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**.
 3. Install [ffmpeg](https://ffmpeg.org) for format conversion: `brew install ffmpeg` (with [Homebrew](https://brew.sh)).
 
-Requires macOS 26 or later on Apple silicon.
+Requires **macOS 14 Sonoma or later** (Sonoma, Sequoia, Tahoe and newer) on Apple silicon. On macOS 26 and later the app uses the Liquid Glass look; on Sonoma and Sequoia it uses the standard macOS look.
 
 ## Build from source
 
-You need Xcode 26, [uv](https://docs.astral.sh/uv/), [XcodeGen](https://github.com/yonaskolb/XcodeGen) and ffmpeg:
+You need Xcode 26 (the app still runs on macOS 14 Sonoma and later), [uv](https://docs.astral.sh/uv/), [XcodeGen](https://github.com/yonaskolb/XcodeGen) and ffmpeg:
 
 ```bash
 brew install xcodegen ffmpeg uv

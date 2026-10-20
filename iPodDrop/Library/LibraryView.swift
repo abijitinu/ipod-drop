@@ -138,7 +138,7 @@ struct LibraryView: View {
             if store.device.otherWriter {
                 Label("iOpenPod is open. Quit it to make changes here.", systemImage: "exclamationmark.triangle")
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .glassEffect(.regular.tint(.orange.opacity(0.15)), in: .capsule)
+                    .adaptiveGlass(in: .capsule, tint: .orange.opacity(0.15))
             }
             if let activity = store.activity {
                 ActivityRow(activity: activity).frame(maxWidth: 420)
@@ -409,7 +409,7 @@ struct NameSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button(action, action: save)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
                     .disabled(trimmed.isEmpty)
             }
         }

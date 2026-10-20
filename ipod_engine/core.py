@@ -282,6 +282,7 @@ class Engine(QObject):
     def _idle_changed(self, *_args) -> None:
         # Queued sends wait for the device and workspace to be free; retry on every change.
         self._emit_device()
+        QTimer.singleShot(0, self._auto_select)
         QTimer.singleShot(0, self._release_settled)
         QTimer.singleShot(0, self._pump_send)
 
@@ -295,12 +296,22 @@ class Engine(QObject):
 
     @Slot(object)
     def _discovery_changed(self, discovery) -> None:
-        # With no iPod open, open the only usable one. With several, the app asks.
-        if self.devices.active_ipod is None and not self.devices.busy:
-            usable = [c for c in getattr(discovery, "candidates", ()) if c.selectable]
-            if len(usable) == 1:
-                self.devices.select_device(usable[0].id.value)
+        # Discovery reports itself busy while this signal is delivered, so decide
+        # once it has finished.
+        QTimer.singleShot(0, self._auto_select)
         self._emit_device()
+
+    def _auto_select(self) -> None:
+        """With no iPod open, open the only usable one. With several, the app asks.
+
+        iOpenPod also reopens the last-used iPod itself; this covers a first run and
+        the case where the last-used iPod is gone.
+        """
+        if self.devices.active_ipod is not None or self.devices.busy:
+            return
+        usable = [c for c in self.devices.discovery.candidates if c.selectable]
+        if len(usable) == 1:
+            self.devices.select_device(usable[0].id.value)
 
     def select(self, params: dict, reply: Reply) -> None:
         candidate_id = str(params["id"])
