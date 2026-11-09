@@ -6,19 +6,19 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.6</title>
-      <pubDate>Mon, 09 Nov 2026 11:51:02 +0000</pubDate>
-      <sparkle:version>260</sparkle:version>
-      <sparkle:shortVersionString>2.6</sparkle:shortVersionString>
+      <title>Version 2.6.1</title>
+      <pubDate>Mon, 09 Nov 2026 22:37:19 +0000</pubDate>
+      <sparkle:version>261</sparkle:version>
+      <sparkle:shortVersionString>2.6.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.6</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.6</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.6.1</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.6.1</h3>
 <ul>
-<li><b>Faster uploads.</b> Songs already on your iPod are skipped instantly, several files are prepared and converted at once, and each new song is checked once after copying instead of five times. That's most of the wait on a hard-drive iPod.</li>
-<li><b>Undo removals.</b> Songs you remove from the iPod are kept on your Mac for 30 days. Choose File › Recently Removed Songs… to add them back. Your iPod's library is also backed up before every change.</li>
-<li><b>Welcome guide.</b> A short guide on first launch covers connecting your iPod, allowing access to it, and adding music. Find it any time in Help.</li>
+<li><b>Recently Added by day.</b> Songs are grouped under a header for each day (Today, Yesterday, then the date), so you can see exactly what you added and when.</li>
+<li><b>Resizable panes.</b> Drag the edges of the sidebar, Info panel and the Artists and Genres lists to resize them. Opening Info in a small window no longer pushes it off screen, and the player bar adapts to narrow windows.</li>
+<li><b>Clearer access message.</b> If macOS is blocking iPod Drop from your iPod, it now says so and offers a button to open Privacy settings, instead of suggesting Disk Mode.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.6/iPod-Drop-2.6.zip" sparkle:edSignature="gpJ9DqNoyXr8ZizaXUePQs47ckTDQ/LGaSwnTASd/WgR7qWhP+uv3TM2azfOmaxhpbQNO1m6i9ZhUj9IKordBw==" length="174242903" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.6.1/iPod-Drop-2.6.1.zip" sparkle:edSignature="lytDIBIc9NUOrRugKQ6E6TfE5f/jW9bPpoZxH5s6bRdoh9HQ1WN9d3IX4qPrcvMEKhM6YOkmrOdpy7uz5sqrCA==" length="174277375" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>

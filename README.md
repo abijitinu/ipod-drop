@@ -42,6 +42,8 @@ Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes c
 - **Undo removals**: removed songs are copied to `~/Music/iPod Drop/Recently Removed` and kept for 30 days (File › Recently Removed Songs… adds them back), and the iPod's library database is backed up before every save.
 - **Welcome guide**: a short first-run guide covers connecting the iPod, allowing access to it and adding music (Help › Welcome to iPod Drop).
 - **Marked for Removal**: rate a song 1 star on the iPod (or in iPod Drop) and it appears at once in a live "Marked for Removal" playlist on the iPod, so you can listen again and change your mind. When the iPod connects, iPod Drop lists the marked songs and removes them only after you confirm (or automatically, if you turn that on in Settings). Songs on your Mac are never touched.
+- **Recently Added by day**: songs added in the last 90 days, grouped under a header for each day (Today, Yesterday, then the date).
+- **Resizable layout**: drag the sidebar, Info panel and the Artists and Genres lists to resize them; the player bar adapts to narrow windows so nothing is pushed off screen.
 - **Automatic updates**: iPod Drop checks for new versions once a day (or iPod Drop › Check for Updates…) and installs them when you say so. Updates are signed, so only genuine releases install.
 - **Recovers interrupted saves**: if saving to the iPod was cut off (unplugged, crashed), iPod Drop offers to restore the previous library or keep what's there.
 - **Error reports**: Help › Send Error Report… opens an email to the developer with your Mac, iPod and app details and the app's log attached. Nothing is sent until you press Send.
