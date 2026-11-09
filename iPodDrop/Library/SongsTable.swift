@@ -102,11 +102,14 @@ struct SongsTable: View {
         } rows: {
             if groupedByDay {
                 ForEach(days) { group in
-                    Section(group.title) {
+                    Section {
                         ForEach(group.tracks) { track in
                             TableRow(track)
                                 .draggable(TrackDrag.payload(track.id))
                         }
+                    } header: {
+                        Text(group.title)
+                            .font(.headline)
                     }
                 }
             } else {
