@@ -5,6 +5,8 @@ struct SettingsView: View {
     private let store = LibraryStore.shared
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @AppStorage(LibraryStore.markedPlaylistKey) private var markedPlaylist = true
+    @AppStorage(LibraryStore.autoRemoveMarkedKey) private var autoRemoveMarked = false
     @State private var autoUpdate = AppDelegate.shared?.updater.updater.automaticallyChecksForUpdates ?? true
 
     var body: some View {
@@ -17,6 +19,14 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text("iPod Drop starts in the menu bar so you can drop music without opening the library.")
+            }
+            Section {
+                Toggle("Keep a “Marked for Removal” playlist on the iPod", isOn: $markedPlaylist)
+                Toggle("Remove marked songs automatically when the iPod connects", isOn: $autoRemoveMarked)
+            } header: {
+                Text("Songs rated 1 star")
+            } footer: {
+                Text("Rate a song 1 star on your iPod to mark it. It appears in the playlist right away so you can listen again and change your mind. When the iPod connects, iPod Drop offers to remove marked songs (songs on your Mac are never touched).")
             }
             Section {
                 Toggle("Check for updates automatically", isOn: $autoUpdate)

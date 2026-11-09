@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SidebarItem: Hashable {
-    case songs, albums, artists, genres, recentlyAdded
+    case songs, albums, artists, genres, recentlyAdded, marked
     case playlist(String)
 }
 
@@ -44,6 +44,7 @@ struct LibraryView: View {
         .onChange(of: store.tracks) {
             let kept = selection.filter { store.tracksByID[$0] != nil }
             if kept.count != selection.count { selection = kept }
+            if section == .marked, store.markedTracks.isEmpty { section = .songs }  // all reviewed
         }
         .sheet(isPresented: Binding(get: { store.showAddMusic }, set: { store.showAddMusic = $0 })) {
             AddMusicSheet(initialTarget: currentTarget)
@@ -68,6 +69,9 @@ struct LibraryView: View {
         case .recentlyAdded:
             SongsTable(tracks: filtered(store.tracks.sorted { $0.dateAdded > $1.dateAdded }.prefix(200).map { $0 }),
                        selection: $selection, showInspector: $showInspector, initialSort: [])
+        case .marked:
+            // Songs rated 1 star. Change a rating (Info panel) to keep a song.
+            SongsTable(tracks: filtered(store.markedTracks), selection: $selection, showInspector: $showInspector)
         case .albums:
             AlbumsView(tracks: filtered(store.tracks), selection: $selection, showInspector: $showInspector)
         case .artists:
@@ -106,6 +110,7 @@ struct LibraryView: View {
         switch section ?? .songs {
         case .songs: "Songs"
         case .recentlyAdded: "Recently Added"
+        case .marked: LibraryStore.markedPlaylistName
         case .albums: "Albums"
         case .artists: "Artists"
         case .genres: "Genres"
@@ -117,6 +122,7 @@ struct LibraryView: View {
         guard store.device.connected else { return "" }
         let tracks: [Track] = switch section ?? .songs {
         case .playlist(let id): store.playlist(id: id).map { store.tracks(in: $0) } ?? []
+        case .marked: store.markedTracks
         default: store.tracks
         }
         let total = tracks.reduce(0) { $0 + $1.lengthMs }
@@ -154,6 +160,7 @@ struct LibraryView: View {
         let shown: [Track] = switch section ?? .songs {
         case .playlist(let id): store.playlist(id: id).map { store.tracks(in: $0) } ?? []
         case .recentlyAdded: Array(store.tracks.sorted { $0.dateAdded > $1.dateAdded }.prefix(200))
+        case .marked: store.markedTracks
         default: store.tracks
         }
         store.fixInfoRequest = filtered(shown).map(\.id)
@@ -172,6 +179,11 @@ struct LibraryView: View {
             }
             if let activity = store.activity {
                 ActivityRow(activity: activity).frame(maxWidth: 420)
+            } else if store.device.connected, !store.markedTracks.isEmpty, !store.markedBannerDismissed {
+                MarkedBanner(count: store.markedTracks.count, reviewing: section == .marked) {
+                    section = .marked
+                }
+                .frame(maxWidth: 460)
             }
         }
         .padding(16)
@@ -197,6 +209,12 @@ private struct Sidebar: View {
                 libraryRow("Albums", "square.stack", .albums, tracks: store.tracks)
                 libraryRow("Artists", "music.microphone", .artists, tracks: store.tracks)
                 libraryRow("Genres", "guitars", .genres, tracks: store.tracks)
+                if !store.markedTracks.isEmpty {
+                    Label(LibraryStore.markedPlaylistName, systemImage: "star.slash")
+                        .badge(store.markedTracks.count)
+                        .tag(SidebarItem.marked)
+                        .help("Songs rated 1 star, on the iPod or here. Review them, then remove them from the iPod.")
+                }
             }
             Section("Playlists") {
                 ForEach(store.regularPlaylists) { playlist in
@@ -273,6 +291,39 @@ private struct Sidebar: View {
             .disabled(blocked)
         Button("Delete Playlist…", systemImage: "trash", role: .destructive) { store.deleteRequest = playlist }
             .disabled(blocked)
+    }
+}
+
+/// "N songs are marked for removal": the songs rated 1 star, with Review and Remove.
+private struct MarkedBanner: View {
+    private let store = LibraryStore.shared
+    let count: Int
+    let reviewing: Bool
+    let review: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "star.slash.fill").foregroundStyle(Color.brand)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(Format.songs(count)) marked for removal").font(.callout.weight(.semibold))
+                Text(reviewing ? "Change a song's rating to keep it." : "Rated 1 star on the iPod or here.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if !reviewing {
+                Button("Review", action: review)
+            }
+            Button("Remove…") { store.removalRequest = store.markedTracks.map(\.id) }
+                .glassProminentButtonStyle()
+                .disabled(store.editBlocker != nil)
+            Button("Not Now", systemImage: "xmark") { store.markedBannerDismissed = true }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .adaptiveGlass(in: .rect(cornerRadius: 16, style: .continuous))
     }
 }
 

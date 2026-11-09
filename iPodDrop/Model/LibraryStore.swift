@@ -59,6 +59,42 @@ final class LibraryStore {
         engine.start()
     }
 
+    // MARK: Marked for Removal (songs rated 1 star)
+
+    static let markedPlaylistName = "Marked for Removal"
+    /// Settings keys; the playlist is on by default, removing without asking is off.
+    static let markedPlaylistKey = "markedPlaylist"
+    static let autoRemoveMarkedKey = "autoRemoveMarked"
+
+    /// Songs rated 1 star, on the iPod or here: the ones waiting to be removed.
+    var markedTracks: [Track] { tracks.filter { (1...20).contains($0.rating) } }
+    /// The review banner was closed for this connection.
+    var markedBannerDismissed = false
+
+    /// Once per connection: make sure the iPod has its live "Marked for Removal"
+    /// playlist, and remove marked songs if the person chose that.
+    private func connectedForMarked() {
+        markedBannerDismissed = false
+        let defaults = UserDefaults.standard
+        let wantsPlaylist = defaults.object(forKey: Self.markedPlaylistKey) as? Bool ?? true
+        let autoRemove = defaults.bool(forKey: Self.autoRemoveMarkedKey)
+        let hasPlaylist = playlists.contains { $0.kind == "smart" && $0.name == Self.markedPlaylistName }
+        guard editBlocker == nil, (wantsPlaylist && !hasPlaylist) || (autoRemove && !markedTracks.isEmpty) else { return }
+        Task {
+            if wantsPlaylist && !hasPlaylist { await perform("playlist.ensureMarked", [:]) }
+            if autoRemove { await removeMarked() }
+        }
+    }
+
+    /// Remove every song rated 1 star from the iPod (after confirmation, or automatically).
+    func removeMarked() async {
+        let ids = markedTracks.map(\.id)
+        guard !ids.isEmpty else { return }
+        if await perform("tracks.remove", ["ids": ids]) {
+            finish(.done("Removed \(Format.songs(ids.count)) marked for removal."))
+        }
+    }
+
     var regularPlaylists: [Playlist] {
         playlists.filter(\.isRegular).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -159,6 +195,7 @@ final class LibraryStore {
         repeat {
             refreshAgain = false
             do {
+                let firstLoad = !hasLoaded
                 let snapshot = try await engine.call("library.snapshot", as: LibrarySnapshot.self)
                 tracks = snapshot.tracks
                 playlists = snapshot.playlists
@@ -167,6 +204,7 @@ final class LibraryStore {
                 device = snapshot.device
                 hasLoaded = true
                 reconcileSendTarget()
+                if firstLoad { connectedForMarked() }
             } catch {
                 lastError = error.localizedDescription
             }

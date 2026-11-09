@@ -29,7 +29,9 @@ from iOpenPod.app.library_write import WriteProgress
 from iOpenPod.app.library_write_controller import LibraryWriteController, PreparationState
 from iOpenPod.app.models.artwork import ArtworkRequest
 from iPodDB.library.editing import TrackFieldEdit
-from iPodDB.library.playlists import PlaylistKind
+from iPodDB.library.playlists import (
+    PlaylistKind, SmartField, SmartOperator, SmartPlaylist, SmartRule, SmartRuleGroup,
+)
 from storage import HostPath
 
 from ipod_engine.convert import expand
@@ -52,6 +54,12 @@ FIELD_PATHS = {
     "totalTracks": "metadata.total_tracks", "discNumber": "metadata.disc_number",
     "totalDiscs": "metadata.total_discs", "compilation": "metadata.compilation",
 }
+
+
+# A live smart playlist on the iPod: rating a song 1 star on the iPod puts it here at
+# once, ready to review before iPod Drop removes it. Ratings are 0-100; 1 star = 20.
+MARKED_PLAYLIST = "Marked for Removal"
+MARKED_RATING = 20
 
 
 class EngineError(Exception):
@@ -286,6 +294,7 @@ class Engine(QObject):
             "playlist.delete": self.playlist_delete,
             "playlist.setTracks": self.playlist_set_tracks,
             "playlist.addTracks": self.playlist_add_tracks,
+            "playlist.ensureMarked": self.playlist_ensure_marked,
             "tracks.edit": self.tracks_edit,
             "tracks.remove": self.tracks_remove,
             "tracks.editMany": self.tracks_edit_many,
@@ -607,6 +616,19 @@ class Engine(QObject):
         ids = self._track_ids(params.get("trackIds", []))
         self.workspace.create(PlaylistKind.PLAYLIST, name, track_ids=ids)
         self._commit(reply, {"name": name})
+
+    def playlist_ensure_marked(self, params: dict, reply: Reply) -> None:
+        """Create the live "Marked for Removal" smart playlist if this iPod lacks it."""
+        existing = next((p for p in self.workspace.playlists
+                         if p.kind is PlaylistKind.SMART and p.name == MARKED_PLAYLIST), None)
+        if existing is not None:
+            reply({"id": str(existing.playlist_id), "created": False})
+            return
+        self._require_idle()
+        rules = SmartRuleGroup(rules=(SmartRule(SmartField.RATING, SmartOperator.IS, MARKED_RATING),))
+        self.workspace.create(PlaylistKind.SMART, MARKED_PLAYLIST,
+                              smart=SmartPlaylist(rules=rules, live_update=True))
+        self._commit(reply, {"created": True})
 
     def playlist_rename(self, params: dict, reply: Reply) -> None:
         self._require_idle()
