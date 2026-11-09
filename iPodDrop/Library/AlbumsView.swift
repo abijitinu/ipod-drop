@@ -125,7 +125,8 @@ struct GroupedView: View {
     var body: some View {
         let groups = Dictionary(grouping: tracks, by: key)
         let names = groups.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-        HSplitView {
+        ResizableSplit(id: kind == .artist ? "artists" : "genres", defaultWidth: 240,
+                       minLeading: 150, maxLeading: 420, minTrailing: 300) {
             List(names, id: \.self, selection: $chosen) { name in
                 let ids = (groups[name] ?? []).map(\.id)
                 HStack {
@@ -136,16 +137,13 @@ struct GroupedView: View {
                 .contextMenu { TrackActionsMenu(ids: ids) }
                 .draggable(TrackDrag.payload(ids))
             }
-            .frame(minWidth: 200, idealWidth: 240, maxWidth: 320)
-            Group {
-                if let chosen, let songs = groups[chosen] {
-                    SongsTable(tracks: songs, selection: $selection, showInspector: $showInspector)
-                } else {
-                    ContentUnavailableView(kind == .artist ? "Choose an Artist" : "Choose a Genre",
-                                           systemImage: kind == .artist ? "music.microphone" : "guitars")
-                }
+        } trailing: {
+            if let chosen, let songs = groups[chosen] {
+                SongsTable(tracks: songs, selection: $selection, showInspector: $showInspector)
+            } else {
+                ContentUnavailableView(kind == .artist ? "Choose an Artist" : "Choose a Genre",
+                                       systemImage: kind == .artist ? "music.microphone" : "guitars")
             }
-            .frame(minWidth: 400, maxWidth: .infinity)
         }
         .onAppear { if chosen == nil { chosen = names.first } }
     }

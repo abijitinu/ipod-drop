@@ -16,7 +16,7 @@ struct LibraryView: View {
     var body: some View {
         NavigationSplitView {
             Sidebar(selection: $section)
-            .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 360)
         } detail: {
             detail
                 .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -31,7 +31,7 @@ struct LibraryView: View {
                 }
                 .inspector(isPresented: $showInspector) {
                     InspectorView(trackIDs: selection)
-                        .inspectorColumnWidth(min: 280, ideal: 310, max: 380)
+                        .inspectorColumnWidth(min: 250, ideal: 300, max: 460)
                 }
         }
         .searchable(text: $search, placement: .toolbar, prompt: "Search songs, artists, albums")

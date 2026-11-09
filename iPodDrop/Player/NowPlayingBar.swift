@@ -10,18 +10,14 @@ struct NowPlayingBar: View {
     @State private var showQueue = false
 
     var body: some View {
-        HStack(spacing: 18) {
-            nowPlaying
-                .frame(minWidth: 180, maxWidth: 300, alignment: .leading)
-            Spacer(minLength: 0)
-            VStack(spacing: 4) {
-                transport
-                scrubber
-            }
-            .frame(maxWidth: 520)
-            Spacer(minLength: 0)
-            trailing
-                .frame(minWidth: 180, maxWidth: 300, alignment: .trailing)
+        // Gives up room step by step so the column it sits in can always shrink (a
+        // wide minimum here pushed the Info panel off the window): all parts, then
+        // without the volume slider, then without the song text.
+        ViewThatFits(in: .horizontal) {
+            layout(info: .full, volume: true)
+            layout(info: .full, volume: false)
+            layout(info: .artworkOnly, volume: false)
+            layout(info: .none, volume: false)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
@@ -30,17 +26,38 @@ struct NowPlayingBar: View {
         .padding(.bottom, 12)
     }
 
+    private enum InfoStyle { case full, artworkOnly, none }
+
+    private func layout(info: InfoStyle, volume: Bool) -> some View {
+        HStack(spacing: 18) {
+            if info != .none {
+                nowPlaying(showText: info == .full)
+                    .frame(width: info == .full ? 220 : 44, alignment: .leading)
+            }
+            Spacer(minLength: 0)
+            VStack(spacing: 4) {
+                transport
+                scrubber
+            }
+            .frame(minWidth: 260, idealWidth: 420, maxWidth: 520)
+            Spacer(minLength: 0)
+            trailing(volume: volume)
+                .frame(width: volume ? 170 : 20, alignment: .trailing)
+        }
+    }
+
     @ViewBuilder
-    private var nowPlaying: some View {
+    private func nowPlaying(showText: Bool) -> some View {
         if let track = player.current {
             HStack(spacing: 10) {
                 ArtworkView(artworkID: track.artworkId, size: 44, cornerRadius: 6, seed: track.album)
-                VStack(alignment: .leading, spacing: 2) {
+                if showText { VStack(alignment: .leading, spacing: 2) {
                     Text(track.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
                     Text(track.artist.isEmpty ? track.displayAlbum : "\(track.displayArtist) — \(track.displayAlbum)")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
+                } }
             }
+            .help("\(track.displayTitle) — \(track.displayArtist)")
             .contextMenu { TrackActionsMenu(ids: [track.id]) }
         } else {
             HStack(spacing: 10) {
@@ -48,8 +65,10 @@ struct NowPlayingBar: View {
                     .fill(.quaternary)
                     .frame(width: 44, height: 44)
                     .overlay { Image(systemName: "music.note").foregroundStyle(.secondary) }
-                Text("Double-click a song to play it")
-                    .font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                if showText {
+                    Text("Double-click a song to play it")
+                        .font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
         }
     }
@@ -123,7 +142,7 @@ struct NowPlayingBar: View {
         .foregroundStyle(.secondary)
     }
 
-    private var trailing: some View {
+    private func trailing(volume: Bool) -> some View {
         @Bindable var player = player
         return HStack(spacing: 10) {
             Button { showQueue.toggle() } label: { Image(systemName: "list.bullet") }
@@ -131,11 +150,13 @@ struct NowPlayingBar: View {
                 .foregroundStyle(showQueue ? Color.brand : .secondary)
                 .help("Up Next")
                 .popover(isPresented: $showQueue, arrowEdge: .top) { UpNextView() }
-            Image(systemName: "speaker.fill").font(.caption).foregroundStyle(.secondary)
-            Slider(value: $player.volume, in: 0...1)
-                .controlSize(.mini)
-                .frame(width: 100)
-            Image(systemName: "speaker.wave.3.fill").font(.caption).foregroundStyle(.secondary)
+            if volume {
+                Image(systemName: "speaker.fill").font(.caption).foregroundStyle(.secondary)
+                Slider(value: $player.volume, in: 0...1)
+                    .controlSize(.mini)
+                    .frame(width: 100)
+                Image(systemName: "speaker.wave.3.fill").font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }

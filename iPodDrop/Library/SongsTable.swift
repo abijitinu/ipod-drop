@@ -80,17 +80,17 @@ struct SongsTable: View {
                     Text(track.displayTitle).lineLimit(1)
                 }
             }
-            .width(min: 180, ideal: 280)
+            .width(min: 120, ideal: 280)
             TableColumn("Artist", value: \.artist) { Text($0.artist).lineLimit(1) }
-                .width(min: 100, ideal: 180)
+                .width(min: 70, ideal: 180)
             TableColumn("Album", value: \.album) { Text($0.album).lineLimit(1) }
-                .width(min: 100, ideal: 200)
+                .width(min: 70, ideal: 200)
             TableColumn("Time", value: \.lengthMs) { track in
                 Text(Format.duration(ms: track.lengthMs)).monospacedDigit().foregroundStyle(.secondary)
             }
             .width(56)
             TableColumn("Genre", value: \.genre) { Text($0.genre).lineLimit(1).foregroundStyle(.secondary) }
-                .width(min: 60, ideal: 100)
+                .width(min: 50, ideal: 100)
             TableColumn("Year", value: \.year) { track in
                 Text(track.year > 0 ? String(track.year) : "").monospacedDigit().foregroundStyle(.secondary)
             }
