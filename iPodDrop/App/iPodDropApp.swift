@@ -66,6 +66,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
+        // Plugging in, removing or rearranging displays can leave the window hanging off one.
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.libraryWindow?.fitToScreen() }
+        }
         statusItem = StatusItemController(
             store: store,
             openLibrary: { [weak self] in self?.showLibrary() },
@@ -116,12 +121,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.delegate = self
             window.center()
             window.setFrameAutosaveName("LibraryWindow")
+            // Start just after the close/minimise/zoom buttons.
+            let buttonsEnd = window.standardWindowButton(.zoomButton).map { $0.frame.maxX } ?? 66
+            window.addTitlebarAccessoryViewController(Self.wordmarkAccessory(leading: buttonsEnd + 14))
             libraryWindow = window
         }
-        libraryWindow?.fitToScreen()
         NSApp.setActivationPolicy(.regular)
         libraryWindow?.makeKeyAndOrderFront(nil)
+        libraryWindow?.fitToScreen()  // after showing: before that the window has no screen
         NSApp.activate()
+    }
+
+    /// The "iPod Drop" name beside the window buttons. An AppKit accessory with a
+    /// fixed size, so it stays out of SwiftUI's split-view sizing (a toolbar item in
+    /// the sidebar column fed into a layout loop that crashed 2.4).
+    private static func wordmarkAccessory(leading: CGFloat) -> NSTitlebarAccessoryViewController {
+        let host = NSHostingView(rootView: Wordmark().padding(.leading, leading))
+        host.sizingOptions = []
+        let size = host.fittingSize
+        host.frame = NSRect(x: 0, y: 0, width: ceil(size.width) + 4, height: 28)
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = host
+        accessory.layoutAttribute = .leading
+        return accessory
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -152,7 +174,16 @@ extension NSWindow {
     /// Keep the whole window on its screen. A frame saved on a bigger display, or
     /// grown by an older version, would otherwise hide the bottom of the window.
     func fitToScreen() {
-        guard !styleMask.contains(.fullScreen), let visible = (screen ?? NSScreen.main)?.visibleFrame else { return }
+        guard !styleMask.contains(.fullScreen) else { return }
+        // The display holding most of the window (a saved frame can straddle displays
+        // or hang off one, e.g. after the displays were rearranged).
+        func overlap(_ s: NSScreen) -> CGFloat {
+            let i = s.frame.intersection(self.frame)
+            return i.isNull ? 0 : i.width * i.height
+        }
+        guard let target = NSScreen.screens.max(by: { overlap($0) < overlap($1) }) ?? screen ?? NSScreen.main
+        else { return }
+        let visible = target.visibleFrame
         var frame = self.frame
         frame.size.width = min(frame.width, visible.width)
         frame.size.height = min(frame.height, visible.height)

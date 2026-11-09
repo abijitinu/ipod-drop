@@ -11,6 +11,7 @@ enum ErrorReport {
         let body = summary(problem: problem ?? LibraryStore.shared.recentErrors.last?.message)
         var items: [Any] = [body]
         if let log = logAttachment() { items.append(log) }
+        if let crash = crashAttachment() { items.append(crash) }
 
         if let mail = NSSharingService(named: .composeEmail), mail.canPerform(withItems: items) {
             mail.recipients = [recipient]
@@ -96,6 +97,27 @@ enum ErrorReport {
         } catch {
             return nil
         }
+    }
+
+    /// The newest crash report for iPod Drop from the last week, if any, with the
+    /// home folder shortened to ~.
+    private static func crashAttachment() -> URL? {
+        let folder = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/DiagnosticReports")
+        let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
+        let reports = (try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let newest = reports
+            .filter { $0.lastPathComponent.hasPrefix("iPod Drop") && $0.pathExtension == "ips" }
+            .compactMap { url -> (URL, Date)? in
+                guard let date = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                      date > weekAgo else { return nil }
+                return (url, date)
+            }
+            .max { $0.1 < $1.1 }?.0
+        guard let newest, let data = try? Data(contentsOf: newest) else { return nil }
+        let text = String(decoding: data, as: UTF8.self).replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        let url = FileManager.default.temporaryDirectory.appending(path: "iPod Drop crash.txt")
+        return (try? text.write(to: url, atomically: true, encoding: .utf8)) != nil ? url : nil
     }
 
     private static var macModel: String {

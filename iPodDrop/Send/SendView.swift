@@ -260,34 +260,29 @@ struct ActivityRow: View {
                 icon
                 Text(activity.title)
                     .font(.callout.weight(activity.isWorking ? .semibold : .regular))
-                    .lineLimit(2)
+                    .lineLimit(activity.isWorking ? 1 : 2)
                 Spacer(minLength: 0)
-                if activity.isWorking, let percent = activity.percentText {
-                    Text(percent)
+                if activity.isWorking {
+                    Text(activity.percentText ?? "")
                         .font(.callout.weight(.semibold))
                         .monospacedDigit()
-                        .contentTransition(.numericText())
                         .foregroundStyle(Color.brand)
                 }
             }
             if activity.isWorking {
-                if let item = activity.item, !item.isEmpty {
-                    Text(item)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .contentTransition(.opacity)
-                        .animation(.easeOut(duration: 0.15), value: item)
-                }
+                // Every line is always there while working (blank when unknown), so the
+                // card keeps one size however fast the song and counts change.
+                Text(activity.item ?? " ")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 StripedProgressBar(fraction: activity.fraction)
-                if let count = activity.countText {
-                    Text(count)
-                        .font(.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .contentTransition(.numericText())
-                }
+                Text(activity.countText ?? " ")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 16)

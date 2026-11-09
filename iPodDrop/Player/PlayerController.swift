@@ -225,7 +225,8 @@ final class PlayerController {
     }
 
     private func tick(_ time: CMTime) {
-        guard !isScrubbing, time.isNumeric else { return }
+        // A tick can still arrive just after stop(); with no song loaded, stay at 0:00.
+        guard !isScrubbing, time.isNumeric, player.currentItem != nil else { return }
         currentTime = time.seconds
         if let item = player.currentItem, item.duration.isNumeric, item.duration.seconds > 0 {
             duration = item.duration.seconds

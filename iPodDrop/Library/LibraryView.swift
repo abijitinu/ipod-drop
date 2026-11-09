@@ -20,10 +20,14 @@ struct LibraryView: View {
         } detail: {
             detail
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    VStack(spacing: 0) {
-                        statusOverlay
-                        if store.device.connected { NowPlayingBar() }
-                    }
+                    if store.device.connected { NowPlayingBar() }
+                }
+                // Floats above the player instead of sitting in the safe area: progress
+                // changes many times a second and must never resize the column (a column
+                // whose minimum size keeps changing sends AppKit into a layout loop).
+                .overlay(alignment: .bottom) {
+                    statusOverlay
+                        .padding(.bottom, store.device.connected ? NowPlayingBar.reservedHeight : 0)
                 }
                 .inspector(isPresented: $showInspector) {
                     InspectorView(trackIDs: selection)
@@ -36,6 +40,11 @@ struct LibraryView: View {
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
         .onChange(of: section) { selection.removeAll() }
+        // Forget selected songs that were removed, so the table never points at rows that are gone.
+        .onChange(of: store.tracks) {
+            let kept = selection.filter { store.tracksByID[$0] != nil }
+            if kept.count != selection.count { selection = kept }
+        }
         .sheet(isPresented: Binding(get: { store.showAddMusic }, set: { store.showAddMusic = $0 })) {
             AddMusicSheet(initialTarget: currentTarget)
         }
@@ -198,8 +207,6 @@ private struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
-        // The name sits in the sidebar's part of the title bar, beside the window buttons.
-        .toolbar { WordmarkToolbarItem() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // A solid bar so the playlist list scrolls under it instead of overlapping it.
             VStack(spacing: 0) {
@@ -269,20 +276,10 @@ private struct Sidebar: View {
     }
 }
 
-/// The wordmark as a toolbar item, without the glass capsule macOS 26 puts behind items.
-private struct WordmarkToolbarItem: ToolbarContent {
-    var body: some ToolbarContent {
-        if #available(macOS 26, *) {
-            ToolbarItem(placement: .automatic) { Wordmark() }
-                .sharedBackgroundVisibility(.hidden)
-        } else {
-            ToolbarItem(placement: .automatic) { Wordmark() }
-        }
-    }
-}
-
-/// "iPod Drop" wordmark with the iPod logo, in the sidebar's title bar, in Apple Music red.
-private struct Wordmark: View {
+/// "iPod Drop" wordmark with the iPod logo, in Apple Music red. Shown beside the
+/// window buttons by an AppKit title bar accessory (see `AppDelegate.showLibrary`),
+/// outside the split view so it never takes part in the columns' size calculations.
+struct Wordmark: View {
     var body: some View {
         HStack(spacing: 7) {
             Image("iPodLogo")

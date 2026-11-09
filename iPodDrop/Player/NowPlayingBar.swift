@@ -2,6 +2,9 @@ import SwiftUI
 
 /// Glass player bar along the bottom of the library window.
 struct NowPlayingBar: View {
+    /// Room the bar takes at the bottom of the window, for things that float above it.
+    static let reservedHeight: CGFloat = 80
+
     private let player = PlayerController.shared
     @State private var scrub: Double = 0
     @State private var showQueue = false

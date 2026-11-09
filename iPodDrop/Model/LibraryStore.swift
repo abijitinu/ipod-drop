@@ -48,6 +48,11 @@ final class LibraryStore {
     private var artwork: [String: NSImage] = [:]
     private var artworkTasks: [String: Task<NSImage?, Never>] = [:]
     private var clearActivityTask: Task<Void, Never>?
+    // Progress arrives up to hundreds of times a second during a save; the UI shows
+    // at most ~10 updates a second (the newest one always lands).
+    private var pendingProgress: Activity?
+    private var progressFlush: Task<Void, Never>?
+    private var lastProgressUpdate = Date.distantPast
 
     private init() {
         engine.onEvent = { [weak self] method, data in self?.handle(method, data) }
@@ -102,13 +107,15 @@ final class LibraryStore {
             setActivity(Activity(phase: .importing, done: 0, total: event.files))
         case "send.progress":
             guard let event = try? decoder.decode(ProgressEvent.self, from: data) else { return }
-            setActivity(Activity(phase: .importing, done: event.done, total: event.total, item: activity?.item))
+            updateProgress(Activity(phase: .importing, done: event.done, total: event.total,
+                                    item: (pendingProgress ?? activity)?.item))
         case "send.item":
             guard let event = try? decoder.decode(SendItemEvent.self, from: data) else { return }
             let state = SendItem.State(rawValue: event.state) ?? .ready
-            if state == .converting || state == .queued, var current = activity, current.phase == .importing {
+            if state == .converting || state == .queued, var current = pendingProgress ?? activity,
+               current.phase == .importing {
                 current.item = (event.file as NSString).deletingPathExtension  // the file being read or converted
-                activity = current
+                updateProgress(current)
             }
             if let index = sendLog.firstIndex(where: { $0.file == event.file && $0.state == .converting }) {
                 sendLog[index].state = state
@@ -132,13 +139,13 @@ final class LibraryStore {
         case "write.progress":
             guard let event = try? decoder.decode(WriteProgressEvent.self, from: data),
                   activity?.phase == .saving else { return }
-            setActivity(Activity(phase: .saving, percent: event.percent, label: event.label,
+            updateProgress(Activity(phase: .saving, percent: event.percent, label: event.label,
                                  item: event.item, stepDone: event.done, stepTotal: event.total))
         case "device.error":
             if let event = try? decoder.decode(MessageEvent.self, from: data) { lastError = event.message }
         case "engine.restarting":
             lastError = "The iPod engine restarted. Your last change may not have been saved."
-            if isBusy { activity = nil }
+            if isBusy { setActivity(nil) }
         default:
             break
         }
@@ -217,9 +224,36 @@ final class LibraryStore {
         return text
     }
 
-    private func setActivity(_ value: Activity) {
+    /// Show a new state now (start, finish, failure), dropping any queued progress.
+    private func setActivity(_ value: Activity?) {
         clearActivityTask?.cancel()
+        progressFlush?.cancel()
+        progressFlush = nil
+        pendingProgress = nil
         activity = value
+        lastProgressUpdate = Date()
+    }
+
+    /// A progress step: shown now if the last one was a while ago, else coalesced.
+    private func updateProgress(_ value: Activity) {
+        guard Date().timeIntervalSince(lastProgressUpdate) < 0.1 else {
+            pendingProgress = nil
+            activity = value
+            lastProgressUpdate = Date()
+            return
+        }
+        pendingProgress = value
+        guard progressFlush == nil else { return }
+        progressFlush = Task {
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            progressFlush = nil
+            if let pending = pendingProgress {
+                pendingProgress = nil
+                activity = pending
+                lastProgressUpdate = Date()
+            }
+        }
     }
 
     private func record(_ message: String) {
@@ -229,8 +263,7 @@ final class LibraryStore {
 
     private func finish(_ phase: Activity.Phase) {
         if case .failed(let message) = phase { record(message) }
-        activity = Activity(phase: phase)
-        clearActivityTask?.cancel()
+        setActivity(Activity(phase: phase))
         clearActivityTask = Task {
             try? await Task.sleep(for: .seconds(6))
             guard !Task.isCancelled else { return }
@@ -328,7 +361,7 @@ final class LibraryStore {
                 try await engine.send("device.eject")
                 finish(.done("\(name) is ejected. You can unplug it now."))
             } catch {
-                activity = nil
+                setActivity(nil)
                 lastError = error.localizedDescription
             }
         }

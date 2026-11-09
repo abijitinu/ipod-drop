@@ -6,19 +6,20 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.4</title>
-      <pubDate>Tue, 20 Oct 2026 10:52:36 +0000</pubDate>
-      <sparkle:version>240</sparkle:version>
-      <sparkle:shortVersionString>2.4</sparkle:shortVersionString>
+      <title>Version 2.4.1</title>
+      <pubDate>Mon, 09 Nov 2026 11:11:28 +0000</pubDate>
+      <sparkle:version>241</sparkle:version>
+      <sparkle:shortVersionString>2.4.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.4</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.4</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.4.1</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.4.1</h3>
 <ul>
-<li><b>See exactly what's happening.</b> While adding, editing or removing songs, iPod Drop shows the song it's working on, how many files are done out of the total, and the percentage.</li>
-<li><b>An iTunes-style progress bar.</b> A moving striped bar shows work is continuing even when the percentage pauses.</li>
-<li><b>A fresh look.</b> The iPod Drop name and an iPod logo sit in the window's top corner, and the app uses Apple Music's red throughout.</li>
+<li><b>Fixes a crash</b> that could close iPod Drop after a few minutes of use (a layout loop in the library window).</li>
+<li><b>The window always fits your screen.</b> On setups with more than one display, the bottom of the window (with the player) could hang off the screen. It now fits the display it's on, also after you plug in or rearrange displays.</li>
+<li>The progress card floats just above the player, and the player no longer shows an old time after its song is removed.</li>
+<li>Error reports now include the latest crash report, so problems are easier to fix.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.4/iPod-Drop-2.4.zip" sparkle:edSignature="FRIh4ZQK6oSFhXSHgDvnGNgpzilZP7abLMI5vOcOH6orECN72bR0TgiJmAYE+B5GQKmutxcoz+iVxnjgPpyyDg==" length="174128168" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.4.1/iPod-Drop-2.4.1.zip" sparkle:edSignature="xQWqK+sr3S1lLitylZzs644uQ2sXynWVHeIc8XNT1+PlpQpOlGcRnaSE5z49iy0PPmPrlCvSLebeLsgkSSzoAw==" length="174135296" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>
