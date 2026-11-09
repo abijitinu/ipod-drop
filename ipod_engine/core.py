@@ -82,6 +82,30 @@ READINESS_TEXT = {
 }
 
 
+BLOCKED_TEXT = ("It's mounted as “{volume}”, but macOS isn't letting iPod Drop read it. Open System Settings › "
+                "Privacy & Security › Files & Folders, turn on Removable Volumes for iPod Drop, then reopen iPod Drop.")
+
+
+def _blocked_ipod_volume() -> str | None:
+    """A mounted iPod this process may not read: macOS privacy (Removable Volumes) said no.
+
+    Without this the iPod looks like it's only charging, which sends people
+    hunting for cables instead of the one switch that fixes it.
+    """
+    try:
+        volumes = list(Path("/Volumes").iterdir())
+    except OSError:
+        return None
+    for volume in volumes:
+        try:
+            (volume / "iPod_Control").stat()
+        except PermissionError:
+            return volume.name
+        except OSError:
+            continue
+    return None
+
+
 def _other_writer_running() -> bool:
     out = subprocess.run(["pgrep", "-f", "bin/iopenpod"], capture_output=True, text=True).stdout
     return bool(out.strip())
@@ -382,7 +406,10 @@ class Engine(QObject):
                 match = unmatched[0]
             if match is not None:
                 unmatched.remove(match)
-        unmounted = [{"name": u.name, "serial": u.serial, "kind": u.kind, "message": u.hint(),
+        blocked = _blocked_ipod_volume() if unmatched else None
+        unmounted = [{"name": u.name, "serial": u.serial, "kind": u.kind,
+                      "message": (BLOCKED_TEXT.format(volume=blocked) if blocked else u.hint()),
+                      "blocked": bool(blocked),
                       "image": image_for_usb(u.product_id)}
                      for u in unmatched]
         return {"devices": devices, "unmounted": unmounted}

@@ -88,7 +88,8 @@ struct DeviceProblemsView: View {
                                     .offset(x: 4, y: 4)
                             }
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("\(problem.name) isn't available")
+                            Text(problem.needsPermission ? "iPod Drop needs permission to open \(problem.name)"
+                                                         : "\(problem.name) isn't available")
                                 .font(.callout.weight(.semibold))
                             Text(problem.message)
                                 .font(.caption)
@@ -96,6 +97,15 @@ struct DeviceProblemsView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                                 .lineLimit(compact ? 5 : nil)
                                 .textSelection(.enabled)
+                            if problem.needsPermission {
+                                Button("Open Privacy Settings") {
+                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                .controlSize(.small)
+                                .padding(.top, 4)
+                            }
                         }
                     }
                 }

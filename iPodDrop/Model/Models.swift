@@ -91,7 +91,8 @@ nonisolated struct DeviceStatus: Decodable, Equatable {
     /// iPods that are plugged in but can't be used, with the reason.
     var problems: [DeviceProblem] {
         devices.filter { !$0.ready }.map { DeviceProblem(name: $0.displayName, message: $0.message, image: $0.image) }
-            + unmounted.map { DeviceProblem(name: $0.name, message: $0.message, image: $0.image) }
+            + unmounted.map { DeviceProblem(name: $0.name, message: $0.message, image: $0.image,
+                                            needsPermission: $0.blocked ?? false) }
     }
 
     var usedFraction: Double {
@@ -124,6 +125,8 @@ nonisolated struct UnmountedIPod: Decodable, Equatable {
     var serial: String
     var kind: String
     var message: String
+    /// Mounted, but macOS privacy settings block iPod Drop from reading it.
+    var blocked: Bool?
     var image: String?
 }
 
@@ -132,6 +135,8 @@ nonisolated struct DeviceProblem: Equatable, Identifiable {
     var name: String
     var message: String
     var image: String?
+    /// Fixed by allowing Removable Volumes access in System Settings.
+    var needsPermission = false
 }
 
 nonisolated struct LibrarySnapshot: Decodable {
