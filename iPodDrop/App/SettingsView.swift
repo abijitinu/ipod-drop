@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var loginError: String?
     @AppStorage(LibraryStore.markedPlaylistKey) private var markedPlaylist = true
     @AppStorage(LibraryStore.autoRemoveMarkedKey) private var autoRemoveMarked = false
+    @AppStorage(LibraryStore.keepRemovedCopiesKey) private var keepRemovedCopies = true
     @State private var autoUpdate = AppDelegate.shared?.updater.updater.automaticallyChecksForUpdates ?? true
 
     var body: some View {
@@ -23,6 +24,7 @@ struct SettingsView: View {
             Section {
                 Toggle("Keep a “Marked for Removal” playlist on the iPod", isOn: $markedPlaylist)
                 Toggle("Remove marked songs automatically when the iPod connects", isOn: $autoRemoveMarked)
+                Toggle("Keep a copy of removed songs on this Mac for 30 days", isOn: $keepRemovedCopies)
             } header: {
                 Text("Songs rated 1 star")
             } footer: {

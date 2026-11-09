@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -66,12 +67,10 @@ def probe(path: Path) -> AudioInfo:
 def convert(source: Path, out_dir: Path) -> Path:
     """Write an iPod-compatible .m4a for source into out_dir and return its path."""
     info = probe(source)
-    suffix = ".m4a"
-    target = out_dir / f"{source.stem}{suffix}"
-    n = 1
-    while target.exists():
-        target = out_dir / f"{source.stem} ({n}){suffix}"
-        n += 1
+    # Each conversion gets its own folder: several run at once, and the file keeps
+    # its original name (it becomes the title when the song has no title tag).
+    folder = Path(tempfile.mkdtemp(prefix="convert-", dir=out_dir))
+    target = folder / f"{source.stem}.m4a"
 
     if info.lossless:
         audio = ["-c:a", "alac", "-sample_fmt", "s16p"]

@@ -364,6 +364,12 @@ private struct LibraryDialogs: ViewModifier {
                                         set: { if !$0 { store.fixInfoRequest = nil } })) {
                 FixInfoSheet(trackIDs: store.fixInfoRequest ?? [])
             }
+            .sheet(isPresented: Binding(get: { store.showWelcome }, set: { store.showWelcome = $0 })) {
+                WelcomeSheet()
+            }
+            .sheet(isPresented: Binding(get: { store.showRecentlyRemoved }, set: { store.showRecentlyRemoved = $0 })) {
+                RecentlyRemovedSheet()
+            }
             .sheet(item: Binding(get: { store.renameRequest }, set: { store.renameRequest = $0 })) { playlist in
                 NameSheet(title: "Rename Playlist", initial: playlist.name, action: "Rename") { name in
                     Task { await store.renamePlaylist(playlist, to: name) }
@@ -403,7 +409,9 @@ private struct LibraryDialogs: ViewModifier {
                     Task { await store.removeFromIPod(Set(ids)) }
                 }
             } message: { _ in
-                Text("They're deleted from the iPod and from every playlist. Files on your Mac aren't affected.")
+                Text(LibraryStore.keepsRemovedCopies
+                     ? "They're deleted from the iPod and every playlist. A copy of each is kept on this Mac in Recently Removed for 30 days."
+                     : "They're deleted from the iPod and from every playlist. Files on your Mac aren't affected.")
             }
     }
 

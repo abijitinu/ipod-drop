@@ -29,6 +29,10 @@ final class LibraryStore {
     private(set) var recentErrors: [(date: Date, message: String)] = []
     /// Shows the Add Music sheet in the library window (toolbar +, ⌘O, popover click).
     var showAddMusic = false
+    /// Shows the Recently Removed sheet (copies of songs removed from the iPod).
+    var showRecentlyRemoved = false
+    /// Shows the first-run guide (once, or from the Help menu).
+    var showWelcome = !UserDefaults.standard.bool(forKey: WelcomeSheet.seenKey)
     // Requests from any right-click menu, presented by the library window.
     /// Songs waiting for "Remove from iPod" confirmation.
     var removalRequest: [String]?
@@ -90,9 +94,7 @@ final class LibraryStore {
     func removeMarked() async {
         let ids = markedTracks.map(\.id)
         guard !ids.isEmpty else { return }
-        if await perform("tracks.remove", ["ids": ids]) {
-            finish(.done("Removed \(Format.songs(ids.count)) marked for removal."))
-        }
+        await removeFromIPod(ids)
     }
 
     var regularPlaylists: [Playlist] {
@@ -177,6 +179,12 @@ final class LibraryStore {
                   activity?.phase == .saving else { return }
             updateProgress(Activity(phase: .saving, percent: event.percent, label: event.label,
                                  item: event.item, stepDone: event.done, stepTotal: event.total))
+        case "keep.progress":
+            guard let event = try? decoder.decode(KeepProgressEvent.self, from: data) else { return }
+            let step = Activity(phase: .saving, percent: event.total > 0 ? event.done * 100 / event.total : nil,
+                                label: "Keeping copies on your Mac", item: event.item,
+                                stepDone: event.done, stepTotal: event.total)
+            if activity?.isWorking == true { updateProgress(step) } else { setActivity(step) }
         case "device.error":
             if let event = try? decoder.decode(MessageEvent.self, from: data) { lastError = event.message }
         case "engine.restarting":
@@ -356,8 +364,35 @@ final class LibraryStore {
         await perform("tracks.editMany", ["items": items])
     }
 
-    func removeFromIPod(_ trackIDs: Set<String>) async {
-        await perform("tracks.remove", ["ids": Array(trackIDs)])
+    static let keepRemovedCopiesKey = "keepRemovedCopies"
+    /// Copies of removed songs stay on the Mac for 30 days (on unless turned off).
+    static var keepsRemovedCopies: Bool {
+        UserDefaults.standard.object(forKey: keepRemovedCopiesKey) as? Bool ?? true
+    }
+    static let recentlyRemovedFolder = FileManager.default.homeDirectoryForCurrentUser
+        .appending(path: "Music/iPod Drop/Recently Removed", directoryHint: .isDirectory)
+
+    /// Remove songs from the iPod (copies are kept on the Mac first, if that's on).
+    @discardableResult
+    func removeFromIPod(_ trackIDs: some Collection<String>) async -> Bool {
+        if let blocker = editBlocker { lastError = blocker; return false }
+        do {
+            let result = try await engine.call("tracks.remove",
+                                               ["ids": Array(trackIDs), "keepCopies": Self.keepsRemovedCopies],
+                                               as: RemoveResult.self)
+            var message = "Removed \(Format.songs(result.removed)) from the iPod."
+            if let kept = result.kept, kept > 0 {
+                message += " Copies are in Recently Removed for 30 days."
+            } else if Self.keepsRemovedCopies, (result.notKept ?? 0) > 0 {
+                message += " Not enough space on this Mac to keep copies."
+            }
+            finish(.done(message))
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            if isBusy { finish(.failed(error.localizedDescription)) }
+            return false
+        }
     }
 
     enum RecoveryChoice: String { case restore, keep }

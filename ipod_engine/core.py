@@ -9,6 +9,7 @@ Ids are only valid within one library generation; clients refetch on `library.ch
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 import tempfile
@@ -34,7 +35,9 @@ from iPodDB.library.playlists import (
 )
 from storage import HostPath
 
+from ipod_engine import fast_save
 from ipod_engine.convert import expand
+from ipod_engine.safety import KeepCopiesJob, backup_library, removed_song
 from ipod_engine.send import ImportJob, ImportOutcome, song_key
 from ipod_engine.usb import image_for_profile, image_for_usb, usb_ipods
 
@@ -242,6 +245,7 @@ class Engine(QObject):
         self._settled: list = []  # replies to send once the iPod finishes reloading
         self.write: tuple[Reply, dict] | None = None  # in-flight save and its result
         self.save_progress = SaveProgress()
+        self.keep_pending: tuple[tuple[int, ...], Reply] | None = None  # removal waiting for copies
         self.save_names: dict[str, str] = {}  # iPod file -> "Title — Artist", for the current save
         self._last_progress: dict | None = None
         self.eject_reply: Reply | None = None
@@ -274,6 +278,8 @@ class Engine(QObject):
         self.devices.ejectCompleted.connect(self._eject_completed)
         self.writer.changed.connect(self._writer_changed)
         _forward_write_progress(self.writer, self._write_progress)
+        if os.environ.get("IPOD_DROP_FULL_VERIFY") != "1":  # escape hatch: every check iOpenPod does
+            fast_save.install()
         self.devices.restore_previous_device()
         self.devices.start_auto_refresh()
         # Plugging in an iPod that never mounts produces no discovery change; poll USB.
@@ -710,10 +716,44 @@ class Engine(QObject):
         self._commit(reply, {"edited": changed})
 
     def tracks_remove(self, params: dict, reply: Reply) -> None:
+        """Remove songs; first keep a copy of each on the Mac (Recently Removed, 30 days)
+        unless keepCopies is false."""
         self._require_idle()
         ids = self._track_ids(params["ids"])
+        mount = self._mount_path()
+        if not params.get("keepCopies", True) or not mount:
+            self._remove_now(ids, reply, {})
+            return
+        songs = [removed_song(mount, t.metadata.location, t.title or "", t.artist or "")
+                 for t in (self.workspace.track(i) for i in ids) if t is not None and t.metadata.location]
+        self.importing = True  # holds other writes and sends while copying
+        self.keep_pending = (ids, reply)
+        job = KeepCopiesJob(songs)
+        job.signals.progress.connect(self._keep_progress, Qt.ConnectionType.QueuedConnection)
+        job.signals.done.connect(self._keep_done, Qt.ConnectionType.QueuedConnection)
+        self._emit_device()
+        self.import_pool.start(job)
+
+    @Slot(int, int, str)
+    def _keep_progress(self, done: int, total: int, item: str) -> None:
+        self.emit("keep.progress", {"done": done, "total": total, "item": item or None})
+
+    @Slot(object, int, int)
+    def _keep_done(self, folder, kept: int, missing: int) -> None:
+        self.importing = False
+        if self.keep_pending is None:
+            return
+        (ids, reply), self.keep_pending = self.keep_pending, None
+        extra = {"keptFolder": str(folder) if folder else None, "kept": kept, "notKept": missing}
+        try:
+            self._remove_now(tuple(i for i in ids if self.workspace.track(i) is not None), reply, extra)
+        except (EngineError, ValueError, KeyError) as error:
+            reply(error=str(error))
+            self._emit_device()
+
+    def _remove_now(self, ids: tuple[int, ...], reply: Reply, extra: dict) -> None:
         self.workspace.remove_tracks(ids, self.workspace.edit_revision)
-        self._commit(reply, {"removed": len(ids)})
+        self._commit(reply, {"removed": len(ids)} | extra)
 
     # ------------------------------------------------------------ send
 
@@ -805,6 +845,9 @@ class Engine(QObject):
             reply(result | {"saved": False})
             QTimer.singleShot(0, self._pump_send)
             return
+        active = self.devices.active_ipod
+        backup_library(self._mount_path(), active.candidate.display_name if active else "iPod")
+        fast_save.reset()
         self.write = (reply, result)
         self.save_progress.reset()
         self._last_progress = None
@@ -831,6 +874,8 @@ class Engine(QObject):
             # done so the next request doesn't find the iPod busy.
             reply, result = self.write
             self.write = None
+            logger.info("Saved: %d full file reads, %d repeat checks answered from the first read",
+                        fast_save.stats["read"], fast_save.stats["reused"])
             self.emit("write.state", {"state": "saved"})
             self._settled.append(lambda: reply(result | {"saved": True}))
             QTimer.singleShot(0, self._release_settled)

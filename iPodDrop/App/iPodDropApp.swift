@@ -36,6 +36,7 @@ struct iPodDropApp: App {
                     .keyboardShortcut(.downArrow, modifiers: .command)
             }
             CommandGroup(after: .help) {
+                Button("Welcome to iPod Drop") { app.showLibrary(); LibraryStore.shared.showWelcome = true }
                 Button("Send Error Report…") { ErrorReport.compose() }
             }
             CommandGroup(replacing: .newItem) {
@@ -45,6 +46,7 @@ struct iPodDropApp: App {
                     .keyboardShortcut("l")
                 Divider()
                 Button("Fix Info for All Songs…") { app.fixAllInfo() }
+                Button("Recently Removed Songs…") { app.showLibrary(); LibraryStore.shared.showRecentlyRemoved = true }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
             }
         }

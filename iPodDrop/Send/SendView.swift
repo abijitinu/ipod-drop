@@ -261,6 +261,7 @@ struct ActivityRow: View {
                 Text(activity.title)
                     .font(.callout.weight(activity.isWorking ? .semibold : .regular))
                     .lineLimit(activity.isWorking ? 1 : 2)
+                    .contentTransition(.identity)  // a new step name replaces the old one, no cross-fade
                 Spacer(minLength: 0)
                 if activity.isWorking {
                     Text(activity.percentText ?? "")

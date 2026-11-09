@@ -49,9 +49,22 @@ def main(name: str, music: list[str]) -> int:
     client = Client()
     try:
         client.wait_event("engine.ready", timeout=30)
-        status = client.wait_event("device.changed", lambda p: p.get("connected"), timeout=60)
-        if status.get("name") != name:
-            raise SystemExit(f"Refusing to write: the open iPod is {status.get('name')!r}, not {name!r}.")
+        # Open the named iPod even when others are connected (iOpenPod reopens the
+        # last-used one first), and refuse to write to anything else.
+        status = client.wait_event("device.changed", lambda p: any(
+            d["name"] == name and d["ready"] for d in p.get("devices", [])), timeout=60)
+        target = next(d for d in status["devices"] if d["name"] == name)
+        for _ in range(30):  # iOpenPod may still be reopening the last-used iPod
+            reply = client.call("device.select", {"id": target["id"]})
+            if "error" not in reply:
+                break
+            time.sleep(2)
+        else:
+            raise SystemExit(f"Couldn't switch to {name!r}: {reply['error']}")
+        client.wait_event("device.changed", lambda p: p.get("connected") and p.get("id") == target["id"]
+                          and not p.get("busy"), timeout=60)
+        if call(client, "device.status").get("id") != target["id"]:
+            raise SystemExit(f"Refusing to write: couldn't open {name!r} on its own.")
 
         tracks = call(client, "library.snapshot")["tracks"]
         if tracks:

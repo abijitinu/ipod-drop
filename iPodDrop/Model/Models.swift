@@ -149,6 +149,15 @@ nonisolated struct SendResult: Decodable {
     var saved: Bool
 }
 
+nonisolated struct RemoveResult: Decodable {
+    var removed: Int
+    /// Copies kept on the Mac (Recently Removed), when keeping copies was on.
+    var kept: Int?
+    var notKept: Int?
+}
+
+nonisolated struct KeepProgressEvent: Decodable { var done: Int; var total: Int; var item: String? }
+
 nonisolated struct ArtworkResult: Decodable {
     var path: String?
 }
