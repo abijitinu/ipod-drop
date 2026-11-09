@@ -6,20 +6,19 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.4.1</title>
-      <pubDate>Mon, 09 Nov 2026 11:11:28 +0000</pubDate>
-      <sparkle:version>241</sparkle:version>
-      <sparkle:shortVersionString>2.4.1</sparkle:shortVersionString>
+      <title>Version 2.5</title>
+      <pubDate>Mon, 09 Nov 2026 11:24:44 +0000</pubDate>
+      <sparkle:version>250</sparkle:version>
+      <sparkle:shortVersionString>2.5</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.4.1</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.4.1</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.5</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.5</h3>
 <ul>
-<li><b>Fixes a crash</b> that could close iPod Drop after a few minutes of use (a layout loop in the library window).</li>
-<li><b>The window always fits your screen.</b> On setups with more than one display, the bottom of the window (with the player) could hang off the screen. It now fits the display it's on, also after you plug in or rearrange displays.</li>
-<li>The progress card floats just above the player, and the player no longer shows an old time after its song is removed.</li>
-<li>Error reports now include the latest crash report, so problems are easier to fix.</li>
+<li><b>Marked for Removal.</b> Rate a song 1 star on your iPod and it appears right away in a "Marked for Removal" playlist on the iPod, so you can listen again and change your mind. When you connect, iPod Drop lists the marked songs with Review and Remove; nothing is deleted until you confirm.</li>
+<li>Prefer it hands-off? Turn on "Remove marked songs automatically" in Settings.</li>
+<li>Songs on your Mac are never touched.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.4.1/iPod-Drop-2.4.1.zip" sparkle:edSignature="xQWqK+sr3S1lLitylZzs644uQ2sXynWVHeIc8XNT1+PlpQpOlGcRnaSE5z49iy0PPmPrlCvSLebeLsgkSSzoAw==" length="174135296" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.5/iPod-Drop-2.5.zip" sparkle:edSignature="U70F247fKeuUnSlaj5jPI85F4Nl44lffWnhC8uGQKdYHzzcB1jhnbf/ViWvrkCRr8yO4nf33V1RRsanxP+eyBQ==" length="174154047" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>

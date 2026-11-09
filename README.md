@@ -38,6 +38,7 @@ Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes c
 - **Several iPods**: switch between connected iPods; each is shown with a photo of its exact model.
 - **Safe writes**: only one program writes to the iPod at a time, and duplicates are skipped.
 - **Live progress**: adds, edits and deletes show the song being worked on, how many files are done of the total and the percentage, with an iTunes-style moving striped bar.
+- **Marked for Removal**: rate a song 1 star on the iPod (or in iPod Drop) and it appears at once in a live "Marked for Removal" playlist on the iPod, so you can listen again and change your mind. When the iPod connects, iPod Drop lists the marked songs and removes them only after you confirm (or automatically, if you turn that on in Settings). Songs on your Mac are never touched.
 - **Automatic updates**: iPod Drop checks for new versions once a day (or iPod Drop › Check for Updates…) and installs them when you say so. Updates are signed, so only genuine releases install.
 - **Recovers interrupted saves**: if saving to the iPod was cut off (unplugged, crashed), iPod Drop offers to restore the previous library or keep what's there.
 - **Error reports**: Help › Send Error Report… opens an email to the developer with your Mac, iPod and app details and the app's log attached. Nothing is sent until you press Send.
