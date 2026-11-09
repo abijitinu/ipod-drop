@@ -38,6 +38,9 @@ Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes c
 - **Several iPods**: switch between connected iPods; each is shown with a photo of its exact model.
 - **Safe writes**: only one program writes to the iPod at a time, and duplicates are skipped.
 - **Live progress**: adds, edits and deletes show the song being worked on, how many files are done of the total and the percentage, with an iTunes-style moving striped bar.
+- **Faster uploads**: songs already on the iPod are skipped from a quick tag read, up to four files are prepared and converted at once, and each new song is checked once after copying instead of five times (set `IPOD_DROP_FULL_VERIFY=1` to keep every check).
+- **Undo removals**: removed songs are copied to `~/Music/iPod Drop/Recently Removed` and kept for 30 days (File › Recently Removed Songs… adds them back), and the iPod's library database is backed up before every save.
+- **Welcome guide**: a short first-run guide covers connecting the iPod, allowing access to it and adding music (Help › Welcome to iPod Drop).
 - **Marked for Removal**: rate a song 1 star on the iPod (or in iPod Drop) and it appears at once in a live "Marked for Removal" playlist on the iPod, so you can listen again and change your mind. When the iPod connects, iPod Drop lists the marked songs and removes them only after you confirm (or automatically, if you turn that on in Settings). Songs on your Mac are never touched.
 - **Automatic updates**: iPod Drop checks for new versions once a day (or iPod Drop › Check for Updates…) and installs them when you say so. Updates are signed, so only genuine releases install.
 - **Recovers interrupted saves**: if saving to the iPod was cut off (unplugged, crashed), iPod Drop offers to restore the previous library or keep what's there.
