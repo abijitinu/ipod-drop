@@ -8,24 +8,63 @@ struct SongsTable: View {
     @Binding var selection: Set<Track.ID>
     @Binding var showInspector: Bool
     var playlist: Playlist?
+    /// Show the songs under a header for each day they were added (Recently Added).
+    var groupedByDay = false
 
     @State private var sortOrder: [KeyPathComparator<Track>]
     @State private var isTargeted = false
 
     init(tracks: [Track], selection: Binding<Set<Track.ID>>, showInspector: Binding<Bool>,
-         playlist: Playlist? = nil,
+         playlist: Playlist? = nil, groupedByDay: Bool = false,
          initialSort: [KeyPathComparator<Track>]? = nil) {
         self.tracks = tracks
         _selection = selection
         _showInspector = showInspector
         self.playlist = playlist
+        self.groupedByDay = groupedByDay
         // nil = artist, album, track order; [] = keep the given order (playlists, albums)
         _sortOrder = State(initialValue: initialSort
             ?? [KeyPathComparator(\.artist), KeyPathComparator(\.album), KeyPathComparator(\.trackNumber)])
     }
 
     private var rows: [Track] {
-        sortOrder.isEmpty ? tracks : tracks.sorted(using: sortOrder)
+        groupedByDay ? days.flatMap(\.tracks) : (sortOrder.isEmpty ? tracks : tracks.sorted(using: sortOrder))
+    }
+
+    /// Songs by the day they were added, newest day first; a column sort applies within each day.
+    private var days: [DayGroup] {
+        let calendar = Calendar.current
+        let byDay = Dictionary(grouping: tracks) { track in
+            calendar.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(track.dateAdded)))
+        }
+        return byDay.keys.sorted(by: >).map { day in
+            let songs = byDay[day] ?? []
+            return DayGroup(day: day, tracks: sortOrder.isEmpty
+                            ? songs.sorted { $0.dateAdded > $1.dateAdded }
+                            : songs.sorted(using: sortOrder))
+        }
+    }
+
+    struct DayGroup: Identifiable {
+        let day: Date
+        let tracks: [Track]
+        var id: Date { day }
+
+        /// "Today", "Yesterday", "Monday, 3 November" (with the year when it isn't this year).
+        var title: String {
+            let calendar = Calendar.current
+            let name: String
+            if calendar.isDateInToday(day) {
+                name = "Today"
+            } else if calendar.isDateInYesterday(day) {
+                name = "Yesterday"
+            } else if calendar.isDate(day, equalTo: .now, toGranularity: .year) {
+                name = day.formatted(.dateTime.weekday(.wide).day().month(.wide))
+            } else {
+                name = day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+            }
+            return "\(name) · \(Format.songs(tracks.count))"
+        }
     }
 
     /// Selected ids in on-screen order, so playlists keep the order you see.
@@ -61,9 +100,20 @@ struct SongsTable: View {
             }
             .width(48)
         } rows: {
-            ForEach(rows) { track in
-                TableRow(track)
-                    .draggable(TrackDrag.payload(track.id))
+            if groupedByDay {
+                ForEach(days) { group in
+                    Section(group.title) {
+                        ForEach(group.tracks) { track in
+                            TableRow(track)
+                                .draggable(TrackDrag.payload(track.id))
+                        }
+                    }
+                }
+            } else {
+                ForEach(rows) { track in
+                    TableRow(track)
+                        .draggable(TrackDrag.payload(track.id))
+                }
             }
         }
         // Right-click: acts on the selection, or on the clicked row if it isn't selected.

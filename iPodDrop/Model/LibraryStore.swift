@@ -97,6 +97,12 @@ final class LibraryStore {
         await removeFromIPod(ids)
     }
 
+    /// Songs added in the last 90 days, newest first (Recently Added, shown by day).
+    var recentlyAdded: [Track] {
+        let since = Int(Date().addingTimeInterval(-90 * 86400).timeIntervalSince1970)
+        return tracks.filter { $0.dateAdded >= since }.sorted { $0.dateAdded > $1.dateAdded }
+    }
+
     var regularPlaylists: [Playlist] {
         playlists.filter(\.isRegular).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }

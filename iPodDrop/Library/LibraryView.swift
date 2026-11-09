@@ -67,8 +67,8 @@ struct LibraryView: View {
         case .songs:
             SongsTable(tracks: filtered(store.tracks), selection: $selection, showInspector: $showInspector)
         case .recentlyAdded:
-            SongsTable(tracks: filtered(store.tracks.sorted { $0.dateAdded > $1.dateAdded }.prefix(200).map { $0 }),
-                       selection: $selection, showInspector: $showInspector, initialSort: [])
+            SongsTable(tracks: filtered(store.recentlyAdded), selection: $selection, showInspector: $showInspector,
+                       groupedByDay: true, initialSort: [])
         case .marked:
             // Songs rated 1 star. Change a rating (Info panel) to keep a song.
             SongsTable(tracks: filtered(store.markedTracks), selection: $selection, showInspector: $showInspector)
@@ -123,6 +123,7 @@ struct LibraryView: View {
         let tracks: [Track] = switch section ?? .songs {
         case .playlist(let id): store.playlist(id: id).map { store.tracks(in: $0) } ?? []
         case .marked: store.markedTracks
+        case .recentlyAdded: store.recentlyAdded
         default: store.tracks
         }
         let total = tracks.reduce(0) { $0 + $1.lengthMs }
@@ -159,7 +160,7 @@ struct LibraryView: View {
         }
         let shown: [Track] = switch section ?? .songs {
         case .playlist(let id): store.playlist(id: id).map { store.tracks(in: $0) } ?? []
-        case .recentlyAdded: Array(store.tracks.sorted { $0.dateAdded > $1.dateAdded }.prefix(200))
+        case .recentlyAdded: store.recentlyAdded
         case .marked: store.markedTracks
         default: store.tracks
         }
@@ -204,7 +205,7 @@ private struct Sidebar: View {
                     .selectionDisabled()
             }
             Section("Library") {
-                libraryRow("Recently Added", "clock", .recentlyAdded, tracks: store.tracks)
+                libraryRow("Recently Added", "clock", .recentlyAdded, tracks: store.recentlyAdded)
                 libraryRow("Songs", "music.note", .songs, tracks: store.tracks)
                 libraryRow("Albums", "square.stack", .albums, tracks: store.tracks)
                 libraryRow("Artists", "music.microphone", .artists, tracks: store.tracks)
