@@ -28,9 +28,6 @@ struct TrackActionsMenu: View {
                 store.fixInfoRequest = ids
             }
             .disabled(blocked)
-            Button("Choose Cover Art…", systemImage: "photo") { CoverArt.choose(for: ids) }
-                .disabled(blocked)
-                .help("Use an image from your Mac as the cover art")
 
             Menu("Add to Playlist", systemImage: "text.badge.plus") {
                 Button("New Playlist…", systemImage: "plus") { store.newPlaylistRequest = ids }
