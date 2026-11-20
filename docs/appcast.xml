@@ -6,19 +6,17 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.6.1</title>
-      <pubDate>Mon, 09 Nov 2026 22:37:19 +0000</pubDate>
-      <sparkle:version>261</sparkle:version>
-      <sparkle:shortVersionString>2.6.1</sparkle:shortVersionString>
+      <title>Version 2.6.2</title>
+      <pubDate>Fri, 20 Nov 2026 11:04:53 +0000</pubDate>
+      <sparkle:version>262</sparkle:version>
+      <sparkle:shortVersionString>2.6.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.6.1</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.6.1</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.6.2</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.6.2</h3>
 <ul>
-<li><b>Recently Added by day.</b> Songs are grouped under a header for each day (Today, Yesterday, then the date), so you can see exactly what you added and when.</li>
-<li><b>Resizable panes.</b> Drag the edges of the sidebar, Info panel and the Artists and Genres lists to resize them. Opening Info in a small window no longer pushes it off screen, and the player bar adapts to narrow windows.</li>
-<li><b>Clearer access message.</b> If macOS is blocking iPod Drop from your iPod, it now says so and offers a button to open Privacy settings, instead of suggesting Disk Mode.</li>
+<li><b>No more stuck "iPod is busy".</b> If your iPod couldn't read one of its song files while you removed songs, iPod Drop could stay busy until you quit it, blocking adding, editing and removing. It now carries on, removes the song, and tells you which songs couldn't be copied to Recently Removed.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.6.1/iPod-Drop-2.6.1.zip" sparkle:edSignature="lytDIBIc9NUOrRugKQ6E6TfE5f/jW9bPpoZxH5s6bRdoh9HQ1WN9d3IX4qPrcvMEKhM6YOkmrOdpy7uz5sqrCA==" length="174277375" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.6.2/iPod-Drop-2.6.2.zip" sparkle:edSignature="iHGggbFhPmv+j1rseROl9meeqafr++0Gmsbh07hpJXuFmeTMLhwbkxxuurK+2ue1bhgCIHNiwRbC44hPb/cbBA==" length="174279756" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>

@@ -32,10 +32,10 @@ targets:
       path: iPodDrop/Info.plist
       properties:
         CFBundleDisplayName: iPod Drop
-        CFBundleShortVersionString: "2.6.1"
+        CFBundleShortVersionString: "2.6.2"
         # Sparkle compares this number to decide whether an update is newer: raise it
         # with every release (2.4 -> 240).
-        CFBundleVersion: "261"
+        CFBundleVersion: "262"
         LSApplicationCategoryType: public.app-category.music
         LSUIElement: true
         NSHumanReadableCopyright: Built on iOpenPod (GPL-3.0)
