@@ -6,19 +6,22 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.7</title>
-      <pubDate>Fri, 20 Nov 2026 12:01:13 +0000</pubDate>
-      <sparkle:version>270</sparkle:version>
-      <sparkle:shortVersionString>2.7</sparkle:shortVersionString>
+      <title>Version 2.8</title>
+      <pubDate>Fri, 20 Nov 2026 15:38:09 +0000</pubDate>
+      <sparkle:version>280</sparkle:version>
+      <sparkle:shortVersionString>2.8</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.7</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.7</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.8</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.8</h3>
 <ul>
-<li><b>Find duplicates.</b> A new Duplicates list shows songs that are on your iPod more than once. The best copy (cover art, complete info, quality, plays) is marked Keep; Remove Extra Copies removes the rest and puts the kept copy in their playlists.</li>
-<li><b>Your own cover art.</b> In the Info panel, choose Choose Cover Art… or drop an image on the artwork. JPEG, PNG, HEIC, WebP and more; select a whole album to change it at once.</li>
-<li><b>Fix Info searches more catalogues.</b> When iTunes has no good match, Fix Info also tries Deezer and MusicBrainz, for English, Indian and other music. Each suggestion shows where it came from.</li>
+<li><b>Now Playing.</b> Click the song in the player bar for a full-window player: big cover art over a blurred backdrop, the song's details, large controls, and Up Next and Info panels. The toolbar hides and the controls fade while you listen; Esc closes it.</li>
+<li><b>Your iPod at a glance.</b> Click the iPod at the top of the sidebar to see its details, how its storage is used, and your listening patterns: time listened, top genres and decades, time of day, what's on repeat, forgotten favourites and your top artists.</li>
+<li><b>Never Played and On Repeat.</b> Turn on live playlists in Settings, or click Sync at the bottom of the sidebar: songs you haven't heard yet, and the 50 you play most. The iPod keeps them up to date as you listen.</li>
+<li><b>Suggestions as you type.</b> Artist, Album, Album Artist, Genre and Composer in the Info panel suggest names already on your iPod, so spellings stay consistent.</li>
+<li><b>Clearer Info panel.</b> Labels and values line up, Track and Disc read "1 of 12", and empty fields show what to add.</li>
+<li><b>See what's playing.</b> The playing song stands out in song lists with a moving sound icon.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.7/iPod-Drop-2.7.zip" sparkle:edSignature="XoYJ442Atzy2zcC3LrY6VZZLw5vCKd9CCQOp5SNRVBu1v1PxPCbGmVS/bwfJuLFTgpB9CCWwjK4nI8fMHQUnAg==" length="174416631" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.8/iPod-Drop-2.8.zip" sparkle:edSignature="4s8zZsd4JiecH9JudTTUub0fShZBZhFxzS0Q1C8ONy3LQh8wELaIw1CHlPGeoUBUuhwhgGbD8F75CElPvFN/Dg==" length="174711682" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>

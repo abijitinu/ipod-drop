@@ -24,6 +24,11 @@ final class PlayerController {
             UserDefaults.standard.set(volume, forKey: "playerVolume")
         }
     }
+    /// Shows the full-window Now Playing page in the library window.
+    var showsNowPlaying = false
+    /// The side panel open on the Now Playing page, if any.
+    var nowPlayingPanel: NowPlayingPanel?
+    enum NowPlayingPanel { case queue, info }
     /// Set while the user drags the scrubber, so time updates don't fight it.
     var isScrubbing = false
 
@@ -163,6 +168,7 @@ final class PlayerController {
         currentTime = 0
         duration = 0
         if !keepQueue {
+            showsNowPlaying = false
             queue = []
             originalOrder = []
             index = nil

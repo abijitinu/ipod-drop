@@ -31,7 +31,8 @@ from iOpenPod.app.library_write_controller import LibraryWriteController, Prepar
 from iOpenPod.app.models.artwork import ArtworkRequest
 from iPodDB.library.editing import TrackFieldEdit
 from iPodDB.library.playlists import (
-    PlaylistKind, SmartField, SmartOperator, SmartPlaylist, SmartRule, SmartRuleGroup,
+    PlaylistKind, SmartField, SmartLimitSort, SmartLimitUnit, SmartMediaKind, SmartOperator,
+    SmartPlaylist, SmartPlaylistLimit, SmartRule, SmartRuleGroup,
 )
 from storage import HostPath
 
@@ -63,6 +64,23 @@ FIELD_PATHS = {
 # once, ready to review before iPod Drop removes it. Ratings are 0-100; 1 star = 20.
 MARKED_PLAYLIST = "Marked for Removal"
 MARKED_RATING = 20
+
+# Optional live smart playlists, kept by the iPod itself as you listen: music you have
+# never played, and the 50 songs you play most.
+AUTO_PLAYLISTS = {
+    "neverPlayed": "Never Played",
+    "onRepeat": "On Repeat",
+}
+
+
+def _auto_playlist(key: str) -> SmartPlaylist:
+    music = SmartRule(SmartField.MEDIA_KIND, SmartOperator.IS, SmartMediaKind.MUSIC)
+    if key == "neverPlayed":
+        rules = SmartRuleGroup(rules=(SmartRule(SmartField.PLAY_COUNT, SmartOperator.IS, 0), music))
+        return SmartPlaylist(rules=rules, live_update=True)
+    rules = SmartRuleGroup(rules=(SmartRule(SmartField.PLAY_COUNT, SmartOperator.GREATER_THAN, 1), music))
+    limit = SmartPlaylistLimit(50, SmartLimitUnit.TRACKS, SmartLimitSort.PLAY_COUNT, descending=True)
+    return SmartPlaylist(rules=rules, live_update=True, limit=limit)
 
 
 class EngineError(Exception):
@@ -325,6 +343,7 @@ class Engine(QObject):
             "playlist.setTracks": self.playlist_set_tracks,
             "playlist.addTracks": self.playlist_add_tracks,
             "playlist.ensureMarked": self.playlist_ensure_marked,
+            "playlist.ensureAuto": self.playlist_ensure_auto,
             "tracks.edit": self.tracks_edit,
             "tracks.remove": self.tracks_remove,
             "tracks.editMany": self.tracks_edit_many,
@@ -662,6 +681,37 @@ class Engine(QObject):
         self.workspace.create(PlaylistKind.SMART, MARKED_PLAYLIST,
                               smart=SmartPlaylist(rules=rules, live_update=True))
         self._commit(reply, {"created": True})
+
+    def playlist_ensure_auto(self, params: dict, reply: Reply) -> None:
+        """Create the optional smart playlists asked for in ``create``, remove the ones in
+        ``remove`` (only smart playlists with exactly that name) and recount the songs in
+        the ones in ``refresh``, all in one save."""
+        def find(name: str):
+            return next((p for p in self.workspace.playlists
+                         if p.kind is PlaylistKind.SMART and p.name == name), None)
+
+        to_create = [k for k in params.get("create", []) if k in AUTO_PLAYLISTS and find(AUTO_PLAYLISTS[k]) is None]
+        to_remove = [k for k in params.get("remove", []) if k in AUTO_PLAYLISTS and find(AUTO_PLAYLISTS[k]) is not None]
+        to_refresh = [k for k in params.get("refresh", []) if k in AUTO_PLAYLISTS and find(AUTO_PLAYLISTS[k]) is not None
+                      and k not in to_remove]
+        self._require_idle()
+        # Recount the existing ones from the latest play counts; only save if they changed.
+        refreshed = []
+        for key in to_refresh:
+            playlist = find(AUTO_PLAYLISTS[key])
+            before = tuple(playlist.track_ids)
+            if tuple(self.workspace.evaluate_smart(playlist.playlist_id).track_ids) != before:
+                refreshed.append(key)
+        if not to_create and not to_remove and not refreshed:
+            reply({"created": [], "removed": [], "refreshed": []})
+            return
+        for key in to_create:
+            self.workspace.create(PlaylistKind.SMART, AUTO_PLAYLISTS[key], smart=_auto_playlist(key))
+        for key in to_remove:
+            playlist = find(AUTO_PLAYLISTS[key])
+            if playlist is not None:
+                self.workspace.remove_playlist(playlist.playlist_id, self.workspace.edit_revision)
+        self._commit(reply, {"created": to_create, "removed": to_remove, "refreshed": refreshed})
 
     def playlist_rename(self, params: dict, reply: Reply) -> None:
         self._require_idle()

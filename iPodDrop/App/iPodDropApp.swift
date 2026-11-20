@@ -62,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     private var statusItem: StatusItemController?
     private var libraryWindow: NSWindow?
+    private var wordmark: NSTitlebarAccessoryViewController?
 
     /// For views outside the SwiftUI scene (menu bar popover, Settings) that need the updater.
     private(set) static weak var shared: AppDelegate?
@@ -125,13 +126,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.setFrameAutosaveName("LibraryWindow")
             // Start just after the close/minimise/zoom buttons.
             let buttonsEnd = window.standardWindowButton(.zoomButton).map { $0.frame.maxX } ?? 66
-            window.addTitlebarAccessoryViewController(Self.wordmarkAccessory(leading: buttonsEnd + 14))
+            let wordmark = Self.wordmarkAccessory(leading: buttonsEnd + 14)
+            window.addTitlebarAccessoryViewController(wordmark)
+            self.wordmark = wordmark
             libraryWindow = window
         }
         NSApp.setActivationPolicy(.regular)
         libraryWindow?.makeKeyAndOrderFront(nil)
         libraryWindow?.fitToScreen()  // after showing: before that the window has no screen
         NSApp.activate()
+    }
+
+    /// Now Playing is a calm, full-window view: no toolbar, title, app name or window
+    /// buttons while it's open (Esc or its chevron brings them back).
+    func setNowPlayingMode(_ on: Bool) {
+        guard let window = libraryWindow else { return }
+        window.toolbar?.isVisible = !on
+        window.titleVisibility = on ? .hidden : .visible
+        window.titlebarAppearsTransparent = on
+        wordmark?.isHidden = on
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(button)?.isHidden = on
+        }
     }
 
     /// The "iPod Drop" name beside the window buttons. An AppKit accessory with a

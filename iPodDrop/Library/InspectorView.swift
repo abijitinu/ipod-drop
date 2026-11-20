@@ -10,6 +10,11 @@ struct InspectorView: View {
     @State private var original = Draft()
     @State private var saving = false
     @State private var artDropTargeted = false
+    /// The field being typed in, for its list of names already on the iPod.
+    @FocusState private var focusedField: FieldSuggestions.Field?
+    @State private var highlighted: Int?
+    /// Hides the list after a name is picked, until the text changes again.
+    @State private var pickedText: String?
 
     private var tracks: [Track] { trackIDs.compactMap { store.tracksByID[$0] } }
 
@@ -49,24 +54,39 @@ struct InspectorView: View {
                 }
             }
             Section("Details") {
-                field("Title", \.title)
-                field("Artist", \.artist)
-                field("Album", \.album)
-                field("Album Artist", \.albumArtist)
-                field("Genre", \.genre)
-                field("Composer", \.composer)
-                HStack {
-                    field("Year", \.year)
-                    field("Track", \.trackNumber)
-                    field("of", \.totalTracks)
+                textRow("Title", \.title)
+                textRow("Artist", \.artist, suggest: .artist)
+                textRow("Album", \.album, suggest: .album)
+                textRow("Album Artist", \.albumArtist, suggest: .albumArtist)
+                textRow("Genre", \.genre, suggest: .genre)
+                textRow("Composer", \.composer, suggest: .composer)
+                row("Year") {
+                    numberField(\.year, width: 56)
+                    Spacer(minLength: 0)
                 }
-                HStack {
-                    field("Disc", \.discNumber)
-                    field("of", \.totalDiscs)
+                row("Track") {
+                    numberField(\.trackNumber)
+                    Text("of").foregroundStyle(.secondary)
+                    numberField(\.totalTracks)
+                    Spacer(minLength: 0)
                 }
-                LabeledContent("Rating") { RatingControl(stars: $draft.stars, mixed: draft.stars == nil) }
-                TextField("Comment", text: binding(\.comment), prompt: prompt(\.comment), axis: .vertical)
-                    .lineLimit(2...4)
+                row("Disc") {
+                    numberField(\.discNumber)
+                    Text("of").foregroundStyle(.secondary)
+                    numberField(\.totalDiscs)
+                    Spacer(minLength: 0)
+                }
+                row("Rating") {
+                    RatingControl(stars: $draft.stars, mixed: draft.stars == nil)
+                    Spacer(minLength: 0)
+                }
+                row("Comment") {
+                    TextField("Comment", text: binding(\.comment), prompt: prompt(\.comment, "Add a comment"),
+                              axis: .vertical)
+                        .labelsHidden()
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...4)
+                }
             }
             if tracks.count == 1 { fileSection(tracks[0]) }
         }
@@ -126,24 +146,91 @@ struct InspectorView: View {
 
     // MARK: Fields
 
-    private func field(_ label: String, _ key: WritableKeyPath<Draft, String?>) -> some View {
-        TextField(label, text: binding(key), prompt: prompt(key))
+    /// Labels sit in one fixed column, smaller and grey; the values line up after them.
+    private static let labelWidth: CGFloat = 96
+
+    private func row<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: Self.labelWidth, alignment: .leading)
+            content()
+        }
     }
 
-    private func field(_ label: String, _ key: WritableKeyPath<Draft, Int?>) -> some View {
-        TextField(label, text: Binding(
+    private func textRow(_ label: String, _ key: WritableKeyPath<Draft, String?>) -> some View {
+        row(label) {
+            TextField(label, text: binding(key), prompt: prompt(key, "Add \(label.lowercased())"))
+                .labelsHidden()
+                .textFieldStyle(.plain)
+        }
+    }
+
+    /// A text row that lists names already on the iPod under it while you type.
+    /// Click a name, or use the arrow keys and Return, to fill it in.
+    private func textRow(_ label: String, _ key: WritableKeyPath<Draft, String?>,
+                         suggest: FieldSuggestions.Field) -> some View {
+        let text = draft[keyPath: key] ?? ""
+        let names = focusedField == suggest && draft[keyPath: key] != original[keyPath: key] && text != pickedText
+            ? store.suggestions.matches(suggest, for: text, limit: 5) : []
+        let pick = { (name: String) in
+            draft[keyPath: key] = name
+            pickedText = name
+            highlighted = nil
+        }
+        return row(label) {
+            VStack(alignment: .leading, spacing: 6) {
+                TextField(label, text: binding(key), prompt: prompt(key, "Add \(label.lowercased())"))
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .focused($focusedField, equals: suggest)
+                    .onChange(of: text) { highlighted = nil }
+                    .onKeyPress(.downArrow) {
+                        guard !names.isEmpty else { return .ignored }
+                        highlighted = min((highlighted ?? -1) + 1, names.count - 1)
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        guard !names.isEmpty, let index = highlighted else { return .ignored }
+                        highlighted = index > 0 ? index - 1 : nil
+                        return .handled
+                    }
+                    .onKeyPress(.escape) {
+                        guard !names.isEmpty else { return .ignored }
+                        pickedText = text
+                        return .handled
+                    }
+                    .onSubmit {
+                        if let index = highlighted, names.indices.contains(index) { pick(names[index]) }
+                    }
+                if !names.isEmpty {
+                    SuggestionList(names: names, icon: suggest.icon, highlighted: $highlighted, pick: pick)
+                }
+            }
+        }
+    }
+
+    private func numberField(_ key: WritableKeyPath<Draft, Int?>, width: CGFloat = 44) -> some View {
+        TextField("", text: Binding(
             get: { draft[keyPath: key].map { $0 > 0 ? String($0) : "" } ?? "" },
             set: { draft[keyPath: key] = Int($0.filter(\.isNumber)) ?? 0 }
-        ), prompt: Text(draft[keyPath: key] == nil ? "Mixed" : ""))
+        ), prompt: Text(draft[keyPath: key] == nil ? "Mixed" : "–"))
+        .labelsHidden()
+        .textFieldStyle(.plain)
         .monospacedDigit()
+        .lineLimit(1)
+        .frame(width: width, alignment: .leading)
     }
 
     private func binding(_ key: WritableKeyPath<Draft, String?>) -> Binding<String> {
         Binding(get: { draft[keyPath: key] ?? "" }, set: { draft[keyPath: key] = $0 })
     }
 
-    private func prompt(_ key: WritableKeyPath<Draft, String?>) -> Text? {
-        draft[keyPath: key] == nil ? Text("Mixed") : nil
+    /// "Mixed" when the selected songs differ, otherwise a hint for an empty field.
+    private func prompt(_ key: WritableKeyPath<Draft, String?>, _ empty: String) -> Text {
+        Text(draft[keyPath: key] == nil ? "Mixed" : empty)
     }
 
     // MARK: Load and save
@@ -218,6 +305,67 @@ private struct RatingControl: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")
             }
+        }
+    }
+}
+
+/// Names already on the iPod, shown as a small menu under the field being typed in.
+private struct SuggestionList: View {
+    let names: [String]
+    let icon: String
+    @Binding var highlighted: Int?
+    let pick: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("On your iPod")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 2)
+            ForEach(Array(names.enumerated()), id: \.offset) { index, name in
+                let on = index == highlighted
+                Button { pick(name) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: icon)
+                            .font(.caption)
+                            .frame(width: 14)
+                            .foregroundStyle(on ? .white : .secondary)
+                        Text(name)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .foregroundStyle(on ? .white : .primary)
+                        Spacer(minLength: 0)
+                        if on {
+                            Image(systemName: "return")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(on ? Color.brand : .clear,
+                                in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { if $0 { highlighted = index } }
+            }
+        }
+        .padding(5)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+    }
+}
+
+extension FieldSuggestions.Field {
+    var icon: String {
+        switch self {
+        case .artist, .albumArtist: "music.mic"
+        case .album: "square.stack"
+        case .genre: "guitars"
+        case .composer: "music.quarternote.3"
         }
     }
 }

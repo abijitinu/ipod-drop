@@ -8,6 +8,8 @@ struct SettingsView: View {
     @AppStorage(LibraryStore.markedPlaylistKey) private var markedPlaylist = true
     @AppStorage(LibraryStore.autoRemoveMarkedKey) private var autoRemoveMarked = false
     @AppStorage(LibraryStore.keepRemovedCopiesKey) private var keepRemovedCopies = true
+    @AppStorage(LibraryStore.neverPlayedKey) private var neverPlayed = false
+    @AppStorage(LibraryStore.onRepeatKey) private var onRepeat = false
     @State private var autoUpdate = AppDelegate.shared?.updater.updater.automaticallyChecksForUpdates ?? true
 
     var body: some View {
@@ -30,6 +32,16 @@ struct SettingsView: View {
             } footer: {
                 Text("Rate a song 1 star on your iPod to mark it. It appears in the playlist right away so you can listen again and change your mind. When the iPod connects, iPod Drop offers to remove marked songs (songs on your Mac are never touched).")
             }
+            Section {
+                Toggle("“Never Played”: songs you haven’t listened to yet", isOn: $neverPlayed)
+                Toggle("“On Repeat”: the 50 songs you play most", isOn: $onRepeat)
+            } header: {
+                Text("Playlists from your listening")
+            } footer: {
+                Text("Live playlists on the iPod that change by themselves as you listen. iPod Drop adds them when the iPod connects, and removes them if you turn them off.")
+            }
+            .onChange(of: neverPlayed) { Task { await store.syncAutoPlaylists() } }
+            .onChange(of: onRepeat) { Task { await store.syncAutoPlaylists() } }
             Section {
                 Toggle("Check for updates automatically", isOn: $autoUpdate)
                     .onChange(of: autoUpdate) { _, on in

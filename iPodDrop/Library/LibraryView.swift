@@ -2,15 +2,17 @@ import SwiftUI
 
 enum SidebarItem: Hashable {
     case songs, albums, artists, genres, recentlyAdded, marked, duplicates
+    /// The iPod page (storage and listening), from the iPod at the top of the sidebar.
+    case device
     case playlist(String)
 }
 
 /// The Manage window: sidebar of library sections and playlists, content, and inspector.
 struct LibraryView: View {
     private let store = LibraryStore.shared
-    // `-openSection duplicates` opens a section at launch (for testing the window).
+    // `-openSection duplicates` or `device` opens a section at launch (for testing the window).
     @State private var section: SidebarItem? =
-        UserDefaults.standard.string(forKey: "openSection") == "duplicates" ? .duplicates : .songs
+        ["duplicates": .duplicates, "device": .device][UserDefaults.standard.string(forKey: "openSection") ?? ""] ?? .songs
     @State private var selection = Set<Track.ID>()
     @State private var search = ""
     @State private var showInspector = false
@@ -38,6 +40,12 @@ struct LibraryView: View {
         }
         .searchable(text: $search, placement: .toolbar, prompt: "Search songs, artists, albums")
         .toolbar { toolbar }
+        .overlay {
+            if PlayerController.shared.showsNowPlaying, PlayerController.shared.current != nil, store.device.connected {
+                NowPlayingPage()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .overlay { if !store.device.connected { DeviceStateView() } }
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
@@ -56,6 +64,13 @@ struct LibraryView: View {
         .tint(.brand)
         .onChange(of: store.infoRequest) { _, ids in
             guard let ids else { return }
+            // Asked from the Now Playing page: show the info there instead of behind it.
+            let player = PlayerController.shared
+            if player.showsNowPlaying, let current = player.current, ids == [current.id] {
+                player.nowPlayingPanel = .info
+                store.infoRequest = nil
+                return
+            }
             selection = ids
             showInspector = true
             store.infoRequest = nil
@@ -75,6 +90,8 @@ struct LibraryView: View {
         case .marked:
             // Songs rated 1 star. Change a rating (Info panel) to keep a song.
             SongsTable(tracks: filtered(store.markedTracks), selection: $selection, showInspector: $showInspector)
+        case .device:
+            DeviceOverview()
         case .duplicates:
             DuplicatesView(groups: filteredGroups, selection: $selection, showInspector: $showInspector)
         case .albums:
@@ -85,8 +102,10 @@ struct LibraryView: View {
             GroupedView(kind: .genre, tracks: filtered(store.tracks), selection: $selection, showInspector: $showInspector)
         case .playlist(let id):
             if let playlist = store.playlist(id: id) {
+                // Live playlists fill themselves, so they can't be edited or reordered by hand.
                 SongsTable(tracks: filtered(store.tracks(in: playlist)), selection: $selection,
-                           showInspector: $showInspector, playlist: playlist, initialSort: [])
+                           showInspector: $showInspector, playlist: playlist.isRegular ? playlist : nil,
+                           initialSort: [])
             } else {
                 ContentUnavailableView("Playlist Not Found", systemImage: "music.note.list")
             }
@@ -111,7 +130,7 @@ struct LibraryView: View {
 
     /// Where "Add Music" sends files by default: the playlist on screen, else the library.
     private var currentTarget: SendTarget {
-        if case .playlist(let id) = section, let playlist = store.playlist(id: id) {
+        if case .playlist(let id) = section, let playlist = store.playlist(id: id), playlist.isRegular {
             return .playlist(id: playlist.id, name: playlist.name)
         }
         return .library
@@ -123,6 +142,7 @@ struct LibraryView: View {
         case .recentlyAdded: "Recently Added"
         case .marked: LibraryStore.markedPlaylistName
         case .duplicates: "Duplicates"
+        case .device: store.device.name ?? "iPod"
         case .albums: "Albums"
         case .artists: "Artists"
         case .genres: "Genres"
@@ -216,7 +236,8 @@ private struct Sidebar: View {
             Section {
                 DeviceHeader(compact: true)
                     .padding(.vertical, 6)
-                    .selectionDisabled()
+                    .tag(SidebarItem.device)
+                    .help("Show storage and listening for this iPod")
             }
             Section("Library") {
                 libraryRow("Recently Added", "clock", .recentlyAdded, tracks: store.recentlyAdded)
@@ -238,6 +259,10 @@ private struct Sidebar: View {
                 }
             }
             Section("Playlists") {
+                ForEach(store.autoPlaylists) { playlist in
+                    AutoPlaylistRow(playlist: playlist)
+                        .tag(SidebarItem.playlist(playlist.id))
+                }
                 ForEach(store.regularPlaylists) { playlist in
                     PlaylistRow(playlist: playlist)
                         .tag(SidebarItem.playlist(playlist.id))
@@ -255,6 +280,18 @@ private struct Sidebar: View {
                         .buttonStyle(.borderless)
                         .disabled(store.editBlocker != nil)
                     Spacer()
+                    Button {
+                        Task { await store.syncListeningPlaylists() }
+                    } label: {
+                        if store.syncingPlaylists {
+                            HStack(spacing: 5) { ProgressView().controlSize(.mini); Text("Syncing") }
+                        } else {
+                            Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(store.editBlocker != nil || store.isBusy || store.syncingPlaylists)
+                    .help("Update “Never Played” and “On Repeat” on the iPod from your latest listening")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -466,6 +503,40 @@ private struct LibraryDialogs: ViewModifier {
 }
 
 /// A playlist in the sidebar; accepts songs dragged from the table and files from Finder.
+/// "Never Played" or "On Repeat": live playlists the iPod keeps from your listening
+/// (turned on in Settings). They fill themselves, so there's nothing to drop or rename.
+private struct AutoPlaylistRow: View {
+    private let store = LibraryStore.shared
+    let playlist: Playlist
+
+    var body: some View {
+        let tracks = store.tracks(in: playlist)
+        let neverPlayed = playlist.name == LibraryStore.autoPlaylistNames["neverPlayed"]
+        Label(playlist.name, systemImage: neverPlayed ? "sparkles" : "repeat")
+            .badge(tracks.count)
+            .help(neverPlayed ? "Songs you haven't played yet. The iPod updates this as you listen."
+                              : "Your 50 most played songs. The iPod updates this as you listen.")
+            .contextMenu {
+                Button("Play", systemImage: "play.fill") {
+                    PlayerController.shared.shuffle = false
+                    PlayerController.shared.play(tracks)
+                }
+                .disabled(tracks.isEmpty)
+                Button("Shuffle", systemImage: "shuffle") {
+                    PlayerController.shared.shuffle = true
+                    PlayerController.shared.play(tracks.shuffled())
+                }
+                .disabled(tracks.isEmpty)
+                Divider()
+                Button("New Playlist from \(playlist.name)…", systemImage: "text.badge.plus") {
+                    store.newPlaylistRequest = tracks.map(\.id)
+                }
+                .disabled(store.editBlocker != nil || tracks.isEmpty)
+                SettingsLink { Label("Change in Settings…", systemImage: "gearshape") }
+            }
+    }
+}
+
 private struct PlaylistRow: View {
     private let store = LibraryStore.shared
     let playlist: Playlist

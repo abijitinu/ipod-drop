@@ -8,6 +8,7 @@ struct NowPlayingBar: View {
     private let player = PlayerController.shared
     @State private var scrub: Double = 0
     @State private var showQueue = false
+    @State private var hoveringSong = false
 
     var body: some View {
         // Gives up room step by step so the column it sits in can always shrink (a
@@ -51,13 +52,29 @@ struct NowPlayingBar: View {
         if let track = player.current {
             HStack(spacing: 10) {
                 ArtworkView(artworkID: track.artworkId, size: 44, cornerRadius: 6, seed: track.album)
+                    .overlay {
+                        // Shows that clicking opens the big Now Playing page.
+                        if hoveringSong {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(.black.opacity(0.45))
+                                .overlay {
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .transition(.opacity)
+                        }
+                    }
                 if showText { VStack(alignment: .leading, spacing: 2) {
                     Text(track.displayTitle).font(.callout.weight(.semibold)).lineLimit(1)
                     Text(track.artist.isEmpty ? track.displayAlbum : "\(track.displayArtist) — \(track.displayAlbum)")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 } }
             }
-            .help("\(track.displayTitle) — \(track.displayArtist)")
+            .contentShape(.rect)
+            .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { hoveringSong = inside } }
+            .onTapGesture { withAnimation(.smooth(duration: 0.35)) { player.showsNowPlaying = true } }
+            .help("Show Now Playing")
             .contextMenu { TrackActionsMenu(ids: [track.id]) }
         } else {
             HStack(spacing: 10) {
@@ -162,8 +179,10 @@ struct NowPlayingBar: View {
 }
 
 /// The queue: what's playing and what plays next.
-private struct UpNextView: View {
+struct UpNextView: View {
     private let player = PlayerController.shared
+    var width: CGFloat = 340
+    var maxHeight: CGFloat = 360
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -196,10 +215,10 @@ private struct UpNextView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 360)
+                .frame(maxHeight: max(120, maxHeight))
             }
         }
         .padding(14)
-        .frame(width: 340)
+        .frame(width: width)
     }
 }

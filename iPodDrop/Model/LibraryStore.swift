@@ -15,8 +15,13 @@ final class LibraryStore {
 
     private(set) var device = DeviceStatus.disconnected
     private(set) var tracks: [Track] = [] {
-        didSet { duplicateGroups = Duplicates.groups(tracks) }
+        didSet {
+            duplicateGroups = Duplicates.groups(tracks)
+            suggestions = FieldSuggestions(tracks)
+        }
     }
+    /// Names already on the iPod, offered while typing in the Info panel.
+    private(set) var suggestions = FieldSuggestions()
     /// Songs on the iPod more than once, each with the copy worth keeping first.
     private(set) var duplicateGroups: [DuplicateGroup] = []
     private(set) var playlists: [Playlist] = []
@@ -89,11 +94,64 @@ final class LibraryStore {
         let wantsPlaylist = defaults.object(forKey: Self.markedPlaylistKey) as? Bool ?? true
         let autoRemove = defaults.bool(forKey: Self.autoRemoveMarkedKey)
         let hasPlaylist = playlists.contains { $0.kind == "smart" && $0.name == Self.markedPlaylistName }
-        guard editBlocker == nil, (wantsPlaylist && !hasPlaylist) || (autoRemove && !markedTracks.isEmpty) else { return }
+        guard editBlocker == nil else { return }
         Task {
             if wantsPlaylist && !hasPlaylist { await perform("playlist.ensureMarked", [:]) }
-            if autoRemove { await removeMarked() }
+            if autoRemove && !markedTracks.isEmpty { await removeMarked() }
+            await syncAutoPlaylists()
         }
+    }
+
+    // MARK: Never Played and On Repeat (optional, Settings)
+
+    /// Settings keys; both are off until the person turns them on.
+    static let neverPlayedKey = "autoNeverPlayed"
+    static let onRepeatKey = "autoOnRepeat"
+    /// Names the engine gives them on the iPod.
+    static let autoPlaylistNames = ["neverPlayed": "Never Played", "onRepeat": "On Repeat"]
+    /// "iPod id:key" for each of these playlists iPod Drop made, so turning a setting off
+    /// only ever removes the playlist iPod Drop created, never one of the person's own.
+    private static let autoMadeKey = "autoPlaylistsMade"
+
+    /// True while the listening playlists are being updated (the Sync button spins).
+    private(set) var syncingPlaylists = false
+
+    /// The sidebar's Sync button: turns both playlists on if neither is, then brings
+    /// them up to date on the iPod.
+    func syncListeningPlaylists() async {
+        let defaults = UserDefaults.standard
+        if !defaults.bool(forKey: Self.neverPlayedKey), !defaults.bool(forKey: Self.onRepeatKey) {
+            defaults.set(true, forKey: Self.neverPlayedKey)
+            defaults.set(true, forKey: Self.onRepeatKey)
+        }
+        await syncAutoPlaylists()
+    }
+
+    /// Makes the iPod's live "Never Played" and "On Repeat" playlists match Settings:
+    /// adds the ones turned on, removes the ones turned off and recounts the rest from the
+    /// latest plays. Runs when the iPod connects, when a setting changes and from Sync.
+    func syncAutoPlaylists() async {
+        guard editBlocker == nil, !isBusy, let deviceID = device.id else { return }
+        let defaults = UserDefaults.standard
+        var made = Set(defaults.stringArray(forKey: Self.autoMadeKey) ?? [])
+        var create: [String] = [], remove: [String] = [], refresh: [String] = []
+        for (key, setting) in [("neverPlayed", Self.neverPlayedKey), ("onRepeat", Self.onRepeatKey)] {
+            let name = Self.autoPlaylistNames[key] ?? key
+            let exists = playlists.contains { $0.kind == "smart" && $0.name == name }
+            let tag = "\(deviceID):\(key)"
+            if defaults.bool(forKey: setting) {
+                if exists { refresh.append(key) } else { create.append(key) }
+            } else if exists, made.contains(tag) {
+                remove.append(key)
+            }
+        }
+        guard !create.isEmpty || !remove.isEmpty || !refresh.isEmpty else { return }
+        syncingPlaylists = true
+        defer { syncingPlaylists = false }
+        guard await perform("playlist.ensureAuto", ["create": create, "remove": remove, "refresh": refresh]) else { return }
+        for key in create { made.insert("\(deviceID):\(key)") }
+        for key in remove { made.remove("\(deviceID):\(key)") }
+        defaults.set(Array(made).sorted(), forKey: Self.autoMadeKey)
     }
 
     /// Remove every song rated 1 star from the iPod (after confirmation, or automatically).
@@ -124,7 +182,35 @@ final class LibraryStore {
     }
 
     func tracks(in playlist: Playlist) -> [Track] {
-        playlist.trackIds.compactMap { tracksByID[$0] }
+        // The iPod refreshes these live as you listen; work them out the same way here
+        // so the list matches what the iPod shows right now.
+        if playlist.kind == "smart" {
+            switch playlist.name {
+            case Self.autoPlaylistNames["neverPlayed"]: return neverPlayedTracks
+            case Self.autoPlaylistNames["onRepeat"]: return onRepeatTracks
+            default: break
+            }
+        }
+        return playlist.trackIds.compactMap { tracksByID[$0] }
+    }
+
+    /// "Never Played" and "On Repeat" if the iPod has them, in that order.
+    var autoPlaylists: [Playlist] {
+        ["neverPlayed", "onRepeat"].compactMap { key in
+            playlists.first { $0.kind == "smart" && $0.name == Self.autoPlaylistNames[key] }
+        }
+    }
+
+    /// Music not played yet, newest first.
+    var neverPlayedTracks: [Track] {
+        tracks.filter { $0.isAudio && $0.playCount == 0 }.sorted { $0.dateAdded > $1.dateAdded }
+    }
+
+    /// The 50 most played songs (2 plays or more), most played first: the iPod's rule.
+    var onRepeatTracks: [Track] {
+        Array(tracks.filter { $0.isAudio && $0.playCount > 1 }
+            .sorted { $0.playCount != $1.playCount ? $0.playCount > $1.playCount : $0.lastPlayed > $1.lastPlayed }
+            .prefix(50))
     }
 
     func playlist(id: String) -> Playlist? {

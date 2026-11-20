@@ -91,8 +91,7 @@ struct SongsTable: View {
         Table(of: Track.self, selection: $selection, sortOrder: $sortOrder) {
             TableColumn("Title", value: \.title) { track in
                 HStack(spacing: 8) {
-                    ArtworkView(artworkID: track.artworkId, size: 26, cornerRadius: 4, seed: track.album)
-                    Text(track.displayTitle).lineLimit(1)
+                    PlayingTitle(track: track)
                     if keepIDs.contains(track.id) {
                         Text("Keep")
                             .font(.caption2.weight(.semibold))
@@ -193,4 +192,35 @@ struct TrackSection: Identifiable {
     let id: String
     let title: String
     let tracks: [Track]
+}
+
+/// Cover and title in the Title column. The song that's playing stands out: an animated
+/// sound icon over its cover (a still speaker while paused) and its title in the app colour.
+private struct PlayingTitle: View {
+    let track: Track
+    private var player: PlayerController { .shared }
+
+    var body: some View {
+        let isCurrent = player.current?.id == track.id
+        HStack(spacing: 8) {
+            ArtworkView(artworkID: track.artworkId, size: 26, cornerRadius: 4, seed: track.album)
+                .overlay {
+                    if isCurrent {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(.black.opacity(0.5))
+                            .overlay {
+                                Image(systemName: player.isPlaying ? "waveform" : "speaker.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .symbolEffect(.variableColor.iterative, isActive: player.isPlaying)
+                            }
+                    }
+                }
+            Text(track.displayTitle)
+                .lineLimit(1)
+                .fontWeight(isCurrent ? .semibold : .regular)
+                .foregroundStyle(isCurrent ? Color.brand : .primary)
+        }
+        .help(isCurrent ? (player.isPlaying ? "Now playing" : "Paused") : "")
+    }
 }
