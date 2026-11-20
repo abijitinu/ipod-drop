@@ -269,7 +269,7 @@ class Engine(QObject):
         self._settled: list = []  # replies to send once the iPod finishes reloading
         self.write: tuple[Reply, dict] | None = None  # in-flight save and its result
         self.save_progress = SaveProgress()
-        self.keep_pending: tuple[tuple[int, ...], Reply] | None = None  # removal waiting for copies
+        self.keep_pending: tuple[tuple[int, ...], Reply, dict[int, int]] | None = None  # removal waiting for copies
         self.save_names: dict[str, str] = {}  # iPod file -> "Title — Artist", for the current save
         self._last_progress: dict | None = None
         self.eject_reply: Reply | None = None
@@ -747,14 +747,18 @@ class Engine(QObject):
         unless keepCopies is false."""
         self._require_idle()
         ids = self._track_ids(params["ids"])
+        # Duplicates: {removed id: kept id}. Playlists that held a removed copy get the
+        # kept copy in its place, so removing duplicates never empties a playlist.
+        replace = {int(k): int(v) for k, v in (params.get("replaceWith") or {}).items()
+                   if int(k) in ids and int(v) not in ids and self.workspace.track(int(v)) is not None}
         mount = self._mount_path()
         if not params.get("keepCopies", True) or not mount:
-            self._remove_now(ids, reply, {})
+            self._remove_now(ids, reply, {}, replace)
             return
         songs = [removed_song(mount, t.metadata.location, t.title or "", t.artist or "")
                  for t in (self.workspace.track(i) for i in ids) if t is not None and t.metadata.location]
         self.importing = True  # holds other writes and sends while copying
-        self.keep_pending = (ids, reply)
+        self.keep_pending = (ids, reply, replace)
         job = KeepCopiesJob(songs)
         job.signals.progress.connect(self._keep_progress, Qt.ConnectionType.QueuedConnection)
         job.signals.done.connect(self._keep_done, Qt.ConnectionType.QueuedConnection)
@@ -771,16 +775,27 @@ class Engine(QObject):
         if self.keep_pending is None:
             self._emit_device()
             return
-        (ids, reply), self.keep_pending = self.keep_pending, None
+        (ids, reply, replace), self.keep_pending = self.keep_pending, None
         extra = {"keptFolder": str(folder) if folder else None, "kept": kept, "notKept": missing,
                  "notKeptReason": reason or None}
         try:
-            self._remove_now(tuple(i for i in ids if self.workspace.track(i) is not None), reply, extra)
+            self._remove_now(tuple(i for i in ids if self.workspace.track(i) is not None), reply, extra, replace)
         except (EngineError, ValueError, KeyError) as error:
             reply(error=str(error))
             self._emit_device()
 
-    def _remove_now(self, ids: tuple[int, ...], reply: Reply, extra: dict) -> None:
+    def _remove_now(self, ids: tuple[int, ...], reply: Reply, extra: dict,
+                    replace: dict[int, int] | None = None) -> None:
+        replace = {k: v for k, v in (replace or {}).items() if self.workspace.track(v) is not None}
+        if replace:
+            for playlist in tuple(self.workspace.playlists):
+                if playlist.kind is not PlaylistKind.PLAYLIST or playlist.system_managed:
+                    continue
+                current = tuple(playlist.track_ids)
+                if not any(i in replace for i in current):
+                    continue
+                swapped = tuple(dict.fromkeys(replace.get(i, i) for i in current))
+                self.workspace.set_tracks(playlist.playlist_id, swapped)
         self.workspace.remove_tracks(ids, self.workspace.edit_revision)
         self._commit(reply, {"removed": len(ids)} | extra)
 

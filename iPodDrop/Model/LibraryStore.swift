@@ -14,7 +14,11 @@ final class LibraryStore {
     let engine = EngineClient()
 
     private(set) var device = DeviceStatus.disconnected
-    private(set) var tracks: [Track] = []
+    private(set) var tracks: [Track] = [] {
+        didSet { duplicateGroups = Duplicates.groups(tracks) }
+    }
+    /// Songs on the iPod more than once, each with the copy worth keeping first.
+    private(set) var duplicateGroups: [DuplicateGroup] = []
     private(set) var playlists: [Playlist] = []
     private(set) var tracksByID: [String: Track] = [:]
     private(set) var hasLoaded = false
@@ -45,6 +49,8 @@ final class LibraryStore {
     var deleteRequest: Playlist?
     /// Songs to look up in the iTunes catalogue (Fix Info sheet).
     var fixInfoRequest: [String]?
+    /// Duplicate copies waiting for "Remove Extra Copies" confirmation.
+    var duplicateRemovalRequest: [DuplicateGroup]?
 
 
     private var refreshing = false
@@ -380,11 +386,13 @@ final class LibraryStore {
 
     /// Remove songs from the iPod (copies are kept on the Mac first, if that's on).
     @discardableResult
-    func removeFromIPod(_ trackIDs: some Collection<String>) async -> Bool {
+    /// `replacing` maps a removed song to the one taking its place in playlists (duplicates).
+    func removeFromIPod(_ trackIDs: some Collection<String>, replacing: [String: String] = [:]) async -> Bool {
         if let blocker = editBlocker { lastError = blocker; return false }
         do {
             let result = try await engine.call("tracks.remove",
-                                               ["ids": Array(trackIDs), "keepCopies": Self.keepsRemovedCopies],
+                                               ["ids": Array(trackIDs), "keepCopies": Self.keepsRemovedCopies,
+                                                "replaceWith": replacing],
                                                as: RemoveResult.self)
             var message = "Removed \(Format.songs(result.removed)) from the iPod."
             let kept = result.kept ?? 0, notKept = result.notKept ?? 0

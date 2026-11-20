@@ -9,6 +9,7 @@ struct InspectorView: View {
     @State private var draft = Draft()
     @State private var original = Draft()
     @State private var saving = false
+    @State private var artDropTargeted = false
 
     private var tracks: [Track] { trackIDs.compactMap { store.tracksByID[$0] } }
 
@@ -29,13 +30,20 @@ struct InspectorView: View {
         Form {
             Section {
                 HStack(spacing: 14) {
-                    ArtworkView(artworkID: tracks.first { $0.artworkId > 0 }?.artworkId ?? 0, size: 72,
-                                cornerRadius: 8, seed: tracks[0].album)
+                    artwork
                     VStack(alignment: .leading, spacing: 3) {
                         Text(tracks.count == 1 ? tracks[0].displayTitle : "\(tracks.count) songs")
                             .font(.headline).lineLimit(2)
                         Text(tracks.count == 1 ? tracks[0].displayArtist : Format.longDuration(ms: tracks.reduce(0) { $0 + $1.lengthMs }))
                             .foregroundStyle(.secondary).lineLimit(1)
+                        Button(tracks.contains { $0.artworkId > 0 } ? "Change Cover Art…" : "Add Cover Art…") {
+                            CoverArt.choose(for: tracks.map(\.id))
+                        }
+                        .buttonStyle(.link)
+                        .font(.callout)
+                        .disabled(store.editBlocker != nil)
+                        .help("Use an image from your Mac, or drop one on the artwork")
+                        .padding(.top, 2)
                     }
                 }
             }
@@ -78,6 +86,25 @@ struct InspectorView: View {
             .padding(14)
             .background(.bar)  // fields scroll underneath; keep the buttons readable
         }
+    }
+
+    /// The cover; drop an image file from Finder on it to use it for the selected songs.
+    private var artwork: some View {
+        ArtworkView(artworkID: tracks.first { $0.artworkId > 0 }?.artworkId ?? 0, size: 72,
+                    cornerRadius: 8, seed: tracks[0].album)
+            .overlay {
+                if artDropTargeted {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.brand, lineWidth: 3)
+                }
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard store.editBlocker == nil, let url = urls.first(where: CoverArt.isImage) else { return false }
+                let ids = tracks.map(\.id)
+                Task { await CoverArt.apply(url, to: ids) }
+                return true
+            } isTargeted: { artDropTargeted = $0 }
+            .help("Drop an image here to use it as the cover art")
     }
 
     private func fileSection(_ track: Track) -> some View {

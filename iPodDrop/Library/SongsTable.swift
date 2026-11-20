@@ -10,25 +10,40 @@ struct SongsTable: View {
     var playlist: Playlist?
     /// Show the songs under a header for each day they were added (Recently Added).
     var groupedByDay = false
+    /// Show the songs under these headers instead (Duplicates), in the given order.
+    var sections: [TrackSection]?
+    /// Songs marked "Keep" (the copy of a duplicate that stays).
+    var keepIDs: Set<String> = []
 
     @State private var sortOrder: [KeyPathComparator<Track>]
     @State private var isTargeted = false
 
     init(tracks: [Track], selection: Binding<Set<Track.ID>>, showInspector: Binding<Bool>,
          playlist: Playlist? = nil, groupedByDay: Bool = false,
+         sections: [TrackSection]? = nil, keepIDs: Set<String> = [],
          initialSort: [KeyPathComparator<Track>]? = nil) {
         self.tracks = tracks
         _selection = selection
         _showInspector = showInspector
         self.playlist = playlist
         self.groupedByDay = groupedByDay
+        self.sections = sections
+        self.keepIDs = keepIDs
         // nil = artist, album, track order; [] = keep the given order (playlists, albums)
         _sortOrder = State(initialValue: initialSort
             ?? [KeyPathComparator(\.artist), KeyPathComparator(\.album), KeyPathComparator(\.trackNumber)])
     }
 
     private var rows: [Track] {
-        groupedByDay ? days.flatMap(\.tracks) : (sortOrder.isEmpty ? tracks : tracks.sorted(using: sortOrder))
+        if let shown = shownSections { return shown.flatMap(\.tracks) }
+        return sortOrder.isEmpty ? tracks : tracks.sorted(using: sortOrder)
+    }
+
+    /// Headers to show, if any: the given sections, or days for Recently Added.
+    private var shownSections: [TrackSection]? {
+        if let sections { return sections }
+        if groupedByDay { return days.map { TrackSection(id: $0.title, title: $0.title, tracks: $0.tracks) } }
+        return nil
     }
 
     /// Songs by the day they were added, newest day first; a column sort applies within each day.
@@ -78,6 +93,14 @@ struct SongsTable: View {
                 HStack(spacing: 8) {
                     ArtworkView(artworkID: track.artworkId, size: 26, cornerRadius: 4, seed: track.album)
                     Text(track.displayTitle).lineLimit(1)
+                    if keepIDs.contains(track.id) {
+                        Text("Keep")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Color.brand, in: .capsule)
+                            .help("This copy stays: it has the best cover art, info, quality and play count")
+                    }
                 }
             }
             .width(min: 120, ideal: 280)
@@ -100,8 +123,8 @@ struct SongsTable: View {
             }
             .width(48)
         } rows: {
-            if groupedByDay {
-                ForEach(days) { group in
+            if let shownSections {
+                ForEach(shownSections) { group in
                     Section {
                         ForEach(group.tracks) { track in
                             TableRow(track)
@@ -163,4 +186,11 @@ struct SongsTable: View {
             return true
         } isTargeted: { isTargeted = $0 }
     }
+}
+
+/// A titled group of rows in a song list.
+struct TrackSection: Identifiable {
+    let id: String
+    let title: String
+    let tracks: [Track]
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SidebarItem: Hashable {
-    case songs, albums, artists, genres, recentlyAdded, marked
+    case songs, albums, artists, genres, recentlyAdded, marked, duplicates
     case playlist(String)
 }
 
@@ -45,6 +45,7 @@ struct LibraryView: View {
             let kept = selection.filter { store.tracksByID[$0] != nil }
             if kept.count != selection.count { selection = kept }
             if section == .marked, store.markedTracks.isEmpty { section = .songs }  // all reviewed
+            if section == .duplicates, store.duplicateGroups.isEmpty { section = .songs }  // all removed
         }
         .sheet(isPresented: Binding(get: { store.showAddMusic }, set: { store.showAddMusic = $0 })) {
             AddMusicSheet(initialTarget: currentTarget)
@@ -72,6 +73,8 @@ struct LibraryView: View {
         case .marked:
             // Songs rated 1 star. Change a rating (Info panel) to keep a song.
             SongsTable(tracks: filtered(store.markedTracks), selection: $selection, showInspector: $showInspector)
+        case .duplicates:
+            DuplicatesView(groups: filteredGroups, selection: $selection, showInspector: $showInspector)
         case .albums:
             AlbumsView(tracks: filtered(store.tracks), selection: $selection, showInspector: $showInspector)
         case .artists:
@@ -98,6 +101,12 @@ struct LibraryView: View {
         }
     }
 
+    /// Duplicate groups with at least one copy matching the search.
+    private var filteredGroups: [DuplicateGroup] {
+        let shown = Set(filtered(store.duplicateGroups.flatMap(\.all)).map(\.id))
+        return store.duplicateGroups.filter { $0.all.contains { shown.contains($0.id) } }
+    }
+
     /// Where "Add Music" sends files by default: the playlist on screen, else the library.
     private var currentTarget: SendTarget {
         if case .playlist(let id) = section, let playlist = store.playlist(id: id) {
@@ -111,6 +120,7 @@ struct LibraryView: View {
         case .songs: "Songs"
         case .recentlyAdded: "Recently Added"
         case .marked: LibraryStore.markedPlaylistName
+        case .duplicates: "Duplicates"
         case .albums: "Albums"
         case .artists: "Artists"
         case .genres: "Genres"
@@ -124,6 +134,7 @@ struct LibraryView: View {
         case .playlist(let id): store.playlist(id: id).map { store.tracks(in: $0) } ?? []
         case .marked: store.markedTracks
         case .recentlyAdded: store.recentlyAdded
+        case .duplicates: store.duplicateGroups.flatMap(\.all)
         default: store.tracks
         }
         let total = tracks.reduce(0) { $0 + $1.lengthMs }
@@ -162,6 +173,7 @@ struct LibraryView: View {
         case .playlist(let id): store.playlist(id: id).map { store.tracks(in: $0) } ?? []
         case .recentlyAdded: store.recentlyAdded
         case .marked: store.markedTracks
+        case .duplicates: store.duplicateGroups.flatMap(\.all)
         default: store.tracks
         }
         store.fixInfoRequest = filtered(shown).map(\.id)
@@ -215,6 +227,12 @@ private struct Sidebar: View {
                         .badge(store.markedTracks.count)
                         .tag(SidebarItem.marked)
                         .help("Songs rated 1 star, on the iPod or here. Review them, then remove them from the iPod.")
+                }
+                if !store.duplicateGroups.isEmpty {
+                    Label("Duplicates", systemImage: "square.on.square")
+                        .badge(store.duplicateGroups.reduce(0) { $0 + $1.extras.count })
+                        .tag(SidebarItem.duplicates)
+                        .help("Songs that are on the iPod more than once")
                 }
             }
             Section("Playlists") {
@@ -414,6 +432,26 @@ private struct LibraryDialogs: ViewModifier {
                      ? "They're deleted from the iPod and every playlist. A copy of each is kept on this Mac in Recently Removed for 30 days."
                      : "They're deleted from the iPod and from every playlist. Files on your Mac aren't affected.")
             }
+            .confirmationDialog(
+                duplicateRemovalTitle,
+                isPresented: Binding(get: { store.duplicateRemovalRequest != nil },
+                                     set: { if !$0 { store.duplicateRemovalRequest = nil } }),
+                presenting: store.duplicateRemovalRequest
+            ) { groups in
+                Button("Remove Extra Copies", role: .destructive) {
+                    var replacing: [String: String] = [:]
+                    for group in groups { for extra in group.extras { replacing[extra.id] = group.keep.id } }
+                    Task { await store.removeFromIPod(Array(replacing.keys), replacing: replacing) }
+                }
+            } message: { groups in
+                Text("One copy of each of \(Format.songs(groups.count)) stays on the iPod and takes the others' place in playlists."
+                     + (LibraryStore.keepsRemovedCopies ? " The removed copies are kept on this Mac in Recently Removed for 30 days." : ""))
+            }
+    }
+
+    private var duplicateRemovalTitle: String {
+        let extras = store.duplicateRemovalRequest?.reduce(0) { $0 + $1.extras.count } ?? 0
+        return extras == 1 ? "Remove 1 extra copy from your iPod?" : "Remove \(extras) extra copies from your iPod?"
     }
 
     private var removalTitle: String {
