@@ -1,7 +1,7 @@
 import Foundation
 
-/// One song from Apple's iTunes Search API.
-nonisolated struct ITunesSong: Decodable, Hashable, Identifiable, Sendable {
+/// One song as Apple's iTunes Search API returns it.
+nonisolated private struct ITunesSong: Decodable, Sendable {
     let trackId: Int
     let collectionId: Int?
     let trackName: String
@@ -17,30 +17,17 @@ nonisolated struct ITunesSong: Decodable, Hashable, Identifiable, Sendable {
     let trackTimeMillis: Int?
     let artworkUrl100: String?
 
-    var id: Int { trackId }
-    var year: Int? { releaseDate.flatMap { Int($0.prefix(4)) } }
-    var isSingle: Bool { collectionName?.hasSuffix("- Single") ?? false }
-    var isCompilation: Bool { collectionArtistName?.caseInsensitiveCompare("Various Artists") == .orderedSame }
-
-    /// Apple serves any size by rewriting the URL; 600×600 suits the iPod and the app.
-    var artworkURL: URL? {
-        guard let small = artworkUrl100 else { return nil }
-        return URL(string: small.replacingOccurrences(of: "100x100bb", with: "600x600bb"))
-    }
-}
-
-/// A scored suggestion for one song in the library.
-nonisolated struct ITunesMatch: Hashable, Sendable {
-    enum Confidence: Int, Comparable, Sendable {
-        case low, medium, high
-        static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
-    }
-
-    let song: ITunesSong
-    let score: Int
-
-    var confidence: Confidence {
-        score >= 70 ? .high : score >= 45 ? .medium : .low
+    var catalog: CatalogSong {
+        CatalogSong(
+            id: "itunes:\(trackId)", source: .itunes, trackName: trackName, artistName: artistName,
+            collectionName: collectionName, collectionArtistName: collectionArtistName,
+            primaryGenreName: primaryGenreName, year: releaseDate.flatMap { Int($0.prefix(4)) },
+            trackNumber: trackNumber, trackCount: trackCount, discNumber: discNumber, discCount: discCount,
+            trackTimeMillis: trackTimeMillis,
+            // Apple serves any size by rewriting the URL; 600×600 suits the iPod and the app.
+            artworkURL: artworkUrl100.flatMap { URL(string: $0.replacingOccurrences(of: "100x100bb", with: "600x600bb")) },
+            isSingle: collectionName?.hasSuffix("- Single") ?? false,
+            isCompilation: collectionArtistName?.caseInsensitiveCompare("Various Artists") == .orderedSame)
     }
 }
 
@@ -54,7 +41,7 @@ actor ITunesLookup {
     private let country = (Locale.current.region?.identifier ?? "US").lowercased()
 
     /// Track lists of albums already matched, by Apple's album id.
-    private var albums: [Int: [ITunesSong]] = [:]
+    private var albums: [Int: [CatalogSong]] = [:]
     /// Which Apple album each library album turned out to be.
     private var albumForKey: [String: Int] = [:]
 
@@ -62,14 +49,15 @@ actor ITunesLookup {
     /// `albumSize` is how many of the songs being looked up share this track's album:
     /// once one of them matches, the album's whole track list is fetched in a single
     /// request and the rest are matched against it without searching.
-    func matches(for track: Track, query override: String? = nil, albumSize: Int = 1) async throws -> [ITunesMatch] {
+    func matches(for track: Track, query override: String? = nil, albumSize: Int = 1) async throws -> [CatalogMatch] {
         let key = Self.albumKey(track)
         if override == nil, let id = albumForKey[key], let songs = albums[id] {
             let local = Self.ranked(songs, for: track)
             if local.first?.confidence == .high { return local }
         }
         var seen = Set<Int>()
-        var scored: [ITunesMatch] = []
+        var scored: [CatalogMatch] = []
+        var albumIDs: [String: Int] = [:]
         for query in override.map({ [$0] }) ?? Self.queries(for: track) {
             try Task.checkCancellation()
             var results = try await search(query, country: country)
@@ -77,14 +65,16 @@ actor ITunesLookup {
                 // Indian film music is sometimes only in the Indian storefront.
                 results = try await search(query, country: "in")
             }
-            for song in results where seen.insert(song.trackId).inserted {
-                scored.append(ITunesMatch(song: song, score: Self.score(song, against: track)))
+            for result in results where seen.insert(result.trackId).inserted {
+                let song = result.catalog
+                albumIDs[song.id] = result.collectionId
+                scored.append(CatalogMatch(song: song, score: Self.score(song, against: track)))
             }
             if scored.contains(where: { $0.confidence == .high }) { break }
         }
         let ranked = scored.filter { $0.score > 0 }.sorted { $0.score > $1.score }
         if albumSize > 1, !key.isEmpty, albumForKey[key] == nil,
-           let best = ranked.first, best.confidence == .high, let id = best.song.collectionId {
+           let best = ranked.first, best.confidence == .high, let id = albumIDs[best.song.id] {
             albumForKey[key] = id
             if albums[id] == nil, let songs = try? await albumTracks(id) { albums[id] = songs }
         }
@@ -97,13 +87,13 @@ actor ITunesLookup {
         return (clean(track.album) + "|" + track.albumOwner).lowercased()
     }
 
-    private static func ranked(_ songs: [ITunesSong], for track: Track) -> [ITunesMatch] {
-        songs.map { ITunesMatch(song: $0, score: score($0, against: track)) }
+    private static func ranked(_ songs: [CatalogSong], for track: Track) -> [CatalogMatch] {
+        songs.map { CatalogMatch(song: $0, score: score($0, against: track)) }
             .filter { $0.score > 0 }.sorted { $0.score > $1.score }
     }
 
     /// Every song on one album, in one request.
-    private func albumTracks(_ collectionId: Int) async throws -> [ITunesSong] {
+    private func albumTracks(_ collectionId: Int) async throws -> [CatalogSong] {
         for storefront in [country, "in"] {
             var components = URLComponents(string: "https://itunes.apple.com/lookup")!
             components.queryItems = [
@@ -115,7 +105,7 @@ actor ITunesLookup {
             // The first result describes the album itself; keep the songs.
             let items = (try? JSONDecoder().decode(LookupResponse.self, from: data).results) ?? []
             let songs = items.compactMap(\.song)
-            if !songs.isEmpty { return songs }
+            if !songs.isEmpty { return songs.map(\.catalog) }
         }
         return []
     }
@@ -204,7 +194,7 @@ actor ITunesLookup {
                                        "reprise", "unplugged", "slowed", "reverb", "8d", "acoustic", "live"]
 
     /// 0…100+: song length agreement matters most, then title, then artist.
-    static func score(_ song: ITunesSong, against track: Track) -> Int {
+    static func score(_ song: CatalogSong, against track: Track) -> Int {
         var score = 0
         if let ms = song.trackTimeMillis, track.lengthMs > 0 {
             let diff = abs(ms - track.lengthMs) / 1000
@@ -222,10 +212,11 @@ actor ITunesLookup {
         let result = (song.trackName + " " + (song.collectionName ?? "") + " " + song.artistName).lowercased()
         if variantWords.contains(where: { result.contains($0) && !source.contains($0) }) { score -= 50 }
         if song.isSingle { score -= 3 }  // prefer the album version of the same recording
+        if song.isCompilation, !track.compilation { score -= 5 }  // and the artist's own album over a various-artists one
         return score
     }
 
-    private static func tokens(_ text: String) -> Set<String> {
+    static func tokens(_ text: String) -> Set<String> {
         Set(text.lowercased()
             .folding(options: .diacriticInsensitive, locale: nil)
             .split(whereSeparator: { !$0.isLetter && !$0.isNumber })

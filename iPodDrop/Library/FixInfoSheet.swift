@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Look songs up in Apple's iTunes catalogue and apply the info you approve:
+/// Look songs up in iTunes, Deezer and MusicBrainz and apply the info you approve:
 /// title, artist, album, genre, year, track and disc numbers, and cover art.
 /// Works for a few songs or the whole library; big runs start with a short setup.
 struct FixInfoSheet: View {
@@ -63,7 +63,7 @@ struct FixInfoSheet: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Fix Info").font(.title2.weight(.semibold))
-                Text("Matched against Apple's iTunes catalogue by title and song length. Review before applying.")
+                Text("Matched by title and song length in iTunes, then Deezer and MusicBrainz when iTunes has no good match. Review before applying.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
@@ -101,12 +101,12 @@ struct FixInfoSheet: View {
                     Divider()
                     Picker("Update", selection: $fields.onlyEmpty) {
                         Text("Only fill in missing details").tag(true)
-                        Text("Replace details with Apple's").tag(false)
+                        Text("Replace details with the match's").tag(false)
                     }
                     .pickerStyle(.radioGroup)
                     Text(fields.onlyEmpty
                          ? "Titles, artists and other details you already have stay as they are; empty ones are filled in."
-                         : "Every ticked detail is replaced with Apple's version when a match is found.")
+                         : "Every ticked detail is replaced with the match's version when one is found.")
                         .font(.caption).foregroundStyle(.secondary)
                     Divider()
                     fieldToggles
@@ -115,7 +115,7 @@ struct FixInfoSheet: View {
             }
             Label(Self.estimate(songs: count), systemImage: "clock")
                 .font(.callout).foregroundStyle(.secondary)
-            Text("Apple limits how fast songs can be looked up. Songs from the same album are matched together, so albums go faster. You can stop at any time and apply what's been found.")
+            Text("Catalogues limit how fast songs can be looked up. Songs from the same album are matched together, so albums go faster. You can stop at any time and apply what's been found.")
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
             HStack {
@@ -240,10 +240,10 @@ struct FixInfoSheet: View {
         guard rows.indices.contains(index) else { return }
         rows[index].state = .searching
         do {
-            let matches = try await ITunesLookup.shared.matches(for: rows[index].track, query: query, albumSize: albumSize)
+            let matches = try await SongLookup.matches(for: rows[index].track, query: query, albumSize: albumSize)
             guard rows.indices.contains(index) else { return }
             rows[index].matches = Array(matches.prefix(6))
-            rows[index].selection = matches.first.map(\.song.trackId)
+            rows[index].selection = matches.first.map(\.song.id)
             // Only pre-tick confident matches; you decide on the rest.
             rows[index].include = matches.first?.confidence == .high
             rows[index].state = .done
@@ -271,11 +271,13 @@ struct FixInfoSheet: View {
             try? FileManager.default.createDirectory(at: artworkDir, withIntermediateDirectories: true)
             var covers: [URL: String] = [:]  // songs on one album share one download
             for (n, row) in rowsToApply.enumerated() {
-                guard let song = row.selected?.song else { continue }
+                guard let picked = row.selected?.song else { continue }
+                let song = await SongLookup.details(for: picked)  // Deezer/MusicBrainz track numbers and genre
                 var item: [String: Any] = ["id": row.track.id, "fields": fields.changes(from: song, to: row.track)]
                 if fields.wantsArtwork(for: row.track), let url = song.artworkURL {
-                    if covers[url] == nil, let (data, _) = try? await URLSession.shared.data(from: url) {
-                        let file = artworkDir.appending(path: "\(song.trackId).jpg")
+                    if covers[url] == nil, let (data, response) = try? await URLSession.shared.data(from: url),
+                       (response as? HTTPURLResponse)?.statusCode ?? 200 == 200, NSImage(data: data) != nil {
+                        let file = artworkDir.appending(path: "cover-\(covers.count).jpg")
                         if (try? data.write(to: file)) != nil { covers[url] = file.path }
                     }
                     item["artworkPath"] = covers[url]
@@ -304,7 +306,7 @@ struct FixInfoSheet: View {
         }
 
         /// Engine field values from the match that differ from the song now.
-        func changes(from song: ITunesSong, to track: Track) -> [String: Any] {
+        func changes(from song: CatalogSong, to track: Track) -> [String: Any] {
             var out: [String: Any] = [:]
             func put(_ key: String, _ new: String?, _ old: String) {
                 guard let new, !new.isEmpty, new != old else { return }
@@ -343,15 +345,15 @@ struct FixInfoSheet: View {
         var id: String { track.id }
         let track: Track
         var state: State = .waiting
-        var matches: [ITunesMatch] = []
-        var selection: Int?
+        var matches: [CatalogMatch] = []
+        var selection: String?
         var include = false
 
-        var selected: ITunesMatch? { matches.first { $0.song.trackId == selection } }
+        var selected: CatalogMatch? { matches.first { $0.song.id == selection } }
     }
 }
 
-/// One song: what it says now → what Apple suggests, with alternatives.
+/// One song: what it says now → the suggested match, with alternatives.
 private struct FixInfoRow: View {
     @Binding var row: FixInfoSheet.Row
     @State private var searchingCustom = false
@@ -381,7 +383,7 @@ private struct FixInfoRow: View {
         .padding(.vertical, 3)
         .popover(isPresented: $searchingCustom) {
             HStack {
-                TextField("Search iTunes", text: $customQuery)
+                TextField("Search iTunes, Deezer and MusicBrainz", text: $customQuery)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 280)
                     .onSubmit(runCustom)
@@ -415,7 +417,7 @@ private struct FixInfoRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(song.trackName).lineLimit(1)
                         Text([song.artistName, song.collectionName, song.year.map(String.init),
-                              song.trackTimeMillis.map { Format.duration(ms: $0) }]
+                              song.trackTimeMillis.map { Format.duration(ms: $0) }, song.source.rawValue]
                             .compactMap { $0 }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -441,14 +443,14 @@ private struct FixInfoRow: View {
         Menu {
             if !row.matches.isEmpty {
                 Section("Matches") {
-                    ForEach(row.matches, id: \.song.trackId) { match in
+                    ForEach(row.matches, id: \.song.id) { match in
                         let song = match.song
                         Button {
-                            row.selection = song.trackId
+                            row.selection = song.id
                             row.include = true
                         } label: {
-                            Text("\(song.trackName) — \(song.artistName) (\(song.trackTimeMillis.map { Format.duration(ms: $0) } ?? "?"))")
-                            if row.selection == song.trackId { Image(systemName: "checkmark") }
+                            Text("\(song.trackName) — \(song.artistName) (\(song.trackTimeMillis.map { Format.duration(ms: $0) } ?? "?"), \(song.source.rawValue))")
+                            if row.selection == song.id { Image(systemName: "checkmark") }
                         }
                     }
                 }
@@ -475,9 +477,9 @@ private struct FixInfoRow: View {
         let track = row.track
         Task {
             do {
-                let matches = try await ITunesLookup.shared.matches(for: track, query: query)
+                let matches = try await SongLookup.matches(for: track, query: query)
                 row.matches = Array(matches.prefix(6))
-                row.selection = matches.first?.song.trackId
+                row.selection = matches.first?.song.id
                 row.include = matches.first != nil
                 row.state = .done
             } catch {
