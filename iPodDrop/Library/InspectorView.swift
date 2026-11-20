@@ -36,11 +36,12 @@ struct InspectorView: View {
                             .font(.headline).lineLimit(2)
                         Text(tracks.count == 1 ? tracks[0].displayArtist : Format.longDuration(ms: tracks.reduce(0) { $0 + $1.lengthMs }))
                             .foregroundStyle(.secondary).lineLimit(1)
-                        Button(tracks.contains { $0.artworkId > 0 } ? "Change Cover Art…" : "Add Cover Art…") {
+                        Button("Choose Cover Art…") {
                             CoverArt.choose(for: tracks.map(\.id))
                         }
                         .buttonStyle(.link)
                         .font(.callout)
+                        .lineLimit(1)
                         .disabled(store.editBlocker != nil)
                         .help("Use an image from your Mac, or drop one on the artwork")
                         .padding(.top, 2)

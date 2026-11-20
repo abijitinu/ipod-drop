@@ -8,7 +8,9 @@ enum SidebarItem: Hashable {
 /// The Manage window: sidebar of library sections and playlists, content, and inspector.
 struct LibraryView: View {
     private let store = LibraryStore.shared
-    @State private var section: SidebarItem? = .songs
+    // `-openSection duplicates` opens a section at launch (for testing the window).
+    @State private var section: SidebarItem? =
+        UserDefaults.standard.string(forKey: "openSection") == "duplicates" ? .duplicates : .songs
     @State private var selection = Set<Track.ID>()
     @State private var search = ""
     @State private var showInspector = false
