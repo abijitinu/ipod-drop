@@ -33,7 +33,7 @@ Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes c
 - **Menu bar drop**: drag music onto the iPod icon in the menu bar (or into the library window, or choose files and folders) and pick the playlist it goes into.
 - **Any audio format**: MP3, AAC and Apple Lossless go straight on; FLAC, WAV, AIFF, Opus, OGG and others are converted automatically (lossless to Apple Lossless, lossy to 256 kbps AAC).
 - **Manage your iPod**: browse songs, albums, artists and genres; create, rename and delete playlists; edit song info and ratings; remove songs.
-- **Fix Info (grab metadata)**: look songs up in Apple's iTunes catalogue to fix titles, artists, albums, genres, years, track numbers and cover art, with a review step before anything changes. Run it on a few songs or the whole library (File › Fix Info for All Songs…, ⇧⌘I): fill in only what's missing or replace everything; songs from one album are matched together.
+- **Fix Info (grab metadata)**: look songs up in Apple's iTunes catalogue, then Deezer and MusicBrainz when iTunes has no good match (each suggestion shows its source), to fix titles, artists, albums, genres, years, track numbers and cover art, with a review step before anything changes. Run it on a few songs or the whole library (File › Fix Info for All Songs…, ⇧⌘I): fill in only what's missing or replace everything; songs from one album are matched together.
 - **Built-in player**: play songs straight from the iPod, with Up Next, shuffle, repeat and media keys.
 - **Several iPods**: switch between connected iPods; each is shown with a photo of its exact model.
 - **Safe writes**: only one program writes to the iPod at a time, and duplicates are skipped.
@@ -42,6 +42,8 @@ Right-click songs and choose **Fix Info** to grab metadata from Apple's iTunes c
 - **Undo removals**: removed songs are copied to `~/Music/iPod Drop/Recently Removed` and kept for 30 days (File › Recently Removed Songs… adds them back), and the iPod's library database is backed up before every save.
 - **Welcome guide**: a short first-run guide covers connecting the iPod, allowing access to it and adding music (Help › Welcome to iPod Drop).
 - **Marked for Removal**: rate a song 1 star on the iPod (or in iPod Drop) and it appears at once in a live "Marked for Removal" playlist on the iPod, so you can listen again and change your mind. When the iPod connects, iPod Drop lists the marked songs and removes them only after you confirm (or automatically, if you turn that on in Settings). Songs on your Mac are never touched.
+- **Duplicates**: songs on the iPod more than once (same title and artist, ignoring case, accents and punctuation, lengths within 3 seconds) are listed together. The copy with cover art, the most complete info, the best quality and the most plays is kept; Remove Extra Copies removes the rest and puts the kept copy in their playlists.
+- **Custom cover art**: in the Info panel, Choose Cover Art… or drop an image on the artwork (JPEG, PNG, HEIC, WebP and more), for one song or a whole album.
 - **Recently Added by day**: songs added in the last 90 days, grouped under a header for each day (Today, Yesterday, then the date).
 - **Resizable layout**: drag the sidebar, Info panel and the Artists and Genres lists to resize them; the player bar adapts to narrow windows so nothing is pushed off screen.
 - **Automatic updates**: iPod Drop checks for new versions once a day (or iPod Drop › Check for Updates…) and installs them when you say so. Updates are signed, so only genuine releases install.
@@ -100,7 +102,7 @@ tools/make_update.sh              # signed update zip + docs/appcast.xml for in-
 - [iOpenPod](https://github.com/TheRealSavi/iOpenPod) by John Gibbons and contributors: the iPod database engine (GPL-3.0).
 - [HashAB](https://github.com/dstaley/hashab) by Dylan Staley, used by iOpenPod for newer iPod nanos.
 - [libgpod](https://sourceforge.net/projects/gtkpod/) for creating the simulated iPods used in testing.
-- Song info and cover art in Fix Info come from Apple's iTunes Search API.
+- Song info and cover art in Fix Info come from Apple's iTunes Search API, the [Deezer API](https://developers.deezer.com/api) and [MusicBrainz](https://musicbrainz.org) (CC0 data) with covers from the [Cover Art Archive](https://coverartarchive.org).
 
 ## License
 

@@ -6,17 +6,19 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.6.2</title>
-      <pubDate>Fri, 20 Nov 2026 11:04:53 +0000</pubDate>
-      <sparkle:version>262</sparkle:version>
-      <sparkle:shortVersionString>2.6.2</sparkle:shortVersionString>
+      <title>Version 2.7</title>
+      <pubDate>Fri, 20 Nov 2026 12:01:13 +0000</pubDate>
+      <sparkle:version>270</sparkle:version>
+      <sparkle:shortVersionString>2.7</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.6.2</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.6.2</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.7</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.7</h3>
 <ul>
-<li><b>No more stuck "iPod is busy".</b> If your iPod couldn't read one of its song files while you removed songs, iPod Drop could stay busy until you quit it, blocking adding, editing and removing. It now carries on, removes the song, and tells you which songs couldn't be copied to Recently Removed.</li>
+<li><b>Find duplicates.</b> A new Duplicates list shows songs that are on your iPod more than once. The best copy (cover art, complete info, quality, plays) is marked Keep; Remove Extra Copies removes the rest and puts the kept copy in their playlists.</li>
+<li><b>Your own cover art.</b> In the Info panel, choose Choose Cover Art… or drop an image on the artwork. JPEG, PNG, HEIC, WebP and more; select a whole album to change it at once.</li>
+<li><b>Fix Info searches more catalogues.</b> When iTunes has no good match, Fix Info also tries Deezer and MusicBrainz, for English, Indian and other music. Each suggestion shows where it came from.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.6.2/iPod-Drop-2.6.2.zip" sparkle:edSignature="iHGggbFhPmv+j1rseROl9meeqafr++0Gmsbh07hpJXuFmeTMLhwbkxxuurK+2ue1bhgCIHNiwRbC44hPb/cbBA==" length="174279756" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.7/iPod-Drop-2.7.zip" sparkle:edSignature="XoYJ442Atzy2zcC3LrY6VZZLw5vCKd9CCQOp5SNRVBu1v1PxPCbGmVS/bwfJuLFTgpB9CCWwjK4nI8fMHQUnAg==" length="174416631" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>
