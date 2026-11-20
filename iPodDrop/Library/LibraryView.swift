@@ -234,7 +234,10 @@ private struct Sidebar: View {
     var body: some View {
         List(selection: $selection) {
             Section {
-                DeviceHeader(compact: true)
+                HStack(alignment: .top, spacing: 4) {
+                    DeviceHeader(compact: true)
+                    if store.device.connected { syncButton }
+                }
                     .padding(.vertical, 6)
                     .tag(SidebarItem.device)
                     .help("Show storage and listening for this iPod")
@@ -280,24 +283,34 @@ private struct Sidebar: View {
                         .buttonStyle(.borderless)
                         .disabled(store.editBlocker != nil)
                     Spacer()
-                    Button {
-                        Task { await store.syncListeningPlaylists() }
-                    } label: {
-                        if store.syncingPlaylists {
-                            HStack(spacing: 5) { ProgressView().controlSize(.mini); Text("Syncing") }
-                        } else {
-                            Label("Sync", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(store.editBlocker != nil || store.isBusy || store.syncingPlaylists)
-                    .help("Update “Never Played” and “On Repeat” on the iPod from your latest listening")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
             }
             .background(.bar)
         }
+    }
+
+    /// Beside the iPod: brings "Never Played" and "On Repeat" up to date from the latest
+    /// listening (turning them on the first time).
+    private var syncButton: some View {
+        Button {
+            Task { await store.syncListeningPlaylists() }
+        } label: {
+            Group {
+                if store.syncingPlaylists {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+            }
+            .frame(width: 26, height: 26)
+            .contentShape(.circle)
+        }
+        .buttonStyle(.borderless)
+        .disabled(store.editBlocker != nil || store.isBusy || store.syncingPlaylists)
+        .help("Sync: update “Never Played” and “On Repeat” on the iPod from your latest listening")
     }
 
     private func libraryRow(_ title: String, _ symbol: String, _ item: SidebarItem, tracks: [Track],
