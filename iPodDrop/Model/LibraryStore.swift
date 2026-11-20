@@ -387,10 +387,19 @@ final class LibraryStore {
                                                ["ids": Array(trackIDs), "keepCopies": Self.keepsRemovedCopies],
                                                as: RemoveResult.self)
             var message = "Removed \(Format.songs(result.removed)) from the iPod."
-            if let kept = result.kept, kept > 0 {
+            let kept = result.kept ?? 0, notKept = result.notKept ?? 0
+            if kept > 0 {
                 message += " Copies are in Recently Removed for 30 days."
-            } else if Self.keepsRemovedCopies, (result.notKept ?? 0) > 0 {
-                message += " Not enough space on this Mac to keep copies."
+            }
+            if Self.keepsRemovedCopies, notKept > 0 {
+                switch result.notKeptReason {
+                case "space":
+                    message += " Not enough space on this Mac to keep copies."
+                case "unreadable":
+                    message += " \(Format.songs(notKept)) couldn't be read from the iPod (the file may be damaged), so no copy was kept."
+                default:
+                    message += " Copies couldn't be kept on this Mac."
+                }
             }
             finish(.done(message))
             return true

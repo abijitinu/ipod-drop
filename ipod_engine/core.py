@@ -765,13 +765,15 @@ class Engine(QObject):
     def _keep_progress(self, done: int, total: int, item: str) -> None:
         self.emit("keep.progress", {"done": done, "total": total, "item": item or None})
 
-    @Slot(object, int, int)
-    def _keep_done(self, folder, kept: int, missing: int) -> None:
+    @Slot(object, int, int, str)
+    def _keep_done(self, folder, kept: int, missing: int, reason: str) -> None:
         self.importing = False
         if self.keep_pending is None:
+            self._emit_device()
             return
         (ids, reply), self.keep_pending = self.keep_pending, None
-        extra = {"keptFolder": str(folder) if folder else None, "kept": kept, "notKept": missing}
+        extra = {"keptFolder": str(folder) if folder else None, "kept": kept, "notKept": missing,
+                 "notKeptReason": reason or None}
         try:
             self._remove_now(tuple(i for i in ids if self.workspace.track(i) is not None), reply, extra)
         except (EngineError, ValueError, KeyError) as error:
@@ -838,6 +840,11 @@ class Engine(QObject):
 
     def _imported(self, outcome: ImportOutcome, revision, playlist_id, new_name, reply: Reply) -> None:
         self.importing = False
+        if outcome.error:
+            reply(error=f"Could not add songs: {outcome.error}")
+            self._emit_device()
+            QTimer.singleShot(0, self._pump_send)
+            return
         summary = {"added": len(outcome.songs), "skipped": outcome.skipped,
                    "failed": outcome.failures, "playlist": None}
         try:

@@ -90,7 +90,7 @@ def backup_library(mount: str | None, ipod_name: str) -> Path | None:
 
 class _KeepSignals(QObject):
     progress = Signal(int, int, str)  # done, total, current song
-    done = Signal(object, int, int)   # folder or None, kept, not kept
+    done = Signal(object, int, int, str)  # folder or None, kept, not kept, why not kept ("" / space / unreadable / failed)
 
 
 class KeepCopiesJob(QRunnable):
@@ -102,12 +102,30 @@ class KeepCopiesJob(QRunnable):
         self.signals = _KeepSignals()
 
     def run(self) -> None:
+        # Always report back: the engine holds every other change until this finishes,
+        # so an exception escaping here would leave the iPod "busy" until a restart.
+        try:
+            self._run()
+        except Exception:
+            logger.exception("Keeping copies of removed songs failed")
+            self.signals.done.emit(None, 0, len(self.songs), "failed")
+
+    @staticmethod
+    def _size(path: Path) -> int:
+        """File size, or 0 when the iPod can't read it (a damaged file or disk area)."""
+        try:
+            return path.stat().st_size if path.is_file() else 0
+        except OSError as error:
+            logger.warning("Couldn't read %s: %s", path, error)
+            return 0
+
+    def _run(self) -> None:
         prune_recently_removed()
-        needed = sum(s.source.stat().st_size for s in self.songs if s.source.is_file())
+        needed = sum(self._size(s.source) for s in self.songs)
         RECENTLY_REMOVED.mkdir(parents=True, exist_ok=True)
         if shutil.disk_usage(RECENTLY_REMOVED).free < needed + SPARE_BYTES:
             logger.warning("Not enough space on the Mac to keep %d removed songs", len(self.songs))
-            self.signals.done.emit(None, 0, len(self.songs))
+            self.signals.done.emit(None, 0, len(self.songs), "space")
             return
         folder = RECENTLY_REMOVED / time.strftime("%Y-%m-%d %H.%M.%S")
         folder.mkdir(parents=True, exist_ok=True)
@@ -126,6 +144,12 @@ class KeepCopiesJob(QRunnable):
                 kept += 1
             except OSError as error:
                 logger.warning("Couldn't keep a copy of %s: %s", song.source, error)
+                (folder / name).unlink(missing_ok=True)  # no half-copied file
                 missing += 1
         self.signals.progress.emit(len(self.songs), len(self.songs), "")
-        self.signals.done.emit(folder if kept else None, kept, missing)
+        if not kept:
+            try:
+                folder.rmdir()  # only when empty (another removal may share this second's folder)
+            except OSError:
+                pass
+        self.signals.done.emit(folder if kept else None, kept, missing, "unreadable" if missing else "")

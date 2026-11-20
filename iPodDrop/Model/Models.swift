@@ -159,6 +159,7 @@ nonisolated struct RemoveResult: Decodable {
     /// Copies kept on the Mac (Recently Removed), when keeping copies was on.
     var kept: Int?
     var notKept: Int?
+    var notKeptReason: String?  // space / unreadable / failed
 }
 
 nonisolated struct KeepProgressEvent: Decodable { var done: Int; var total: Int; var item: String? }

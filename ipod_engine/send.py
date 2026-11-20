@@ -61,6 +61,7 @@ class ImportOutcome:
     order: list[int | str] = field(default_factory=list)  # existing track id or new location
     failures: int = 0
     skipped: int = 0
+    error: str | None = None  # the whole batch failed (nothing was added)
 
 
 class _ImportSignals(QObject):
@@ -77,6 +78,14 @@ class ImportJob(QRunnable):
         self.signals = _ImportSignals()
 
     def run(self) -> None:
+        # Always report back, or the engine would stay "busy" until a restart.
+        try:
+            self._run()
+        except Exception as error:
+            logger.exception("Preparing songs failed")
+            self.signals.done.emit(ImportOutcome(error=str(error) or type(error).__name__))
+
+    def _run(self) -> None:
         outcome = ImportOutcome()
         allocator = MusicPathAllocator(
             self.profile.capabilities.database.music_directory_count, self.occupied
