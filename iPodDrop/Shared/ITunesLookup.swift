@@ -49,7 +49,8 @@ actor ITunesLookup {
     /// `albumSize` is how many of the songs being looked up share this track's album:
     /// once one of them matches, the album's whole track list is fetched in a single
     /// request and the rest are matched against it without searching.
-    func matches(for track: Track, query override: String? = nil, albumSize: Int = 1) async throws -> [CatalogMatch] {
+    func matches(for track: Track, query override: String? = nil, albumSize: Int = 1,
+                 maxQueries: Int? = nil) async throws -> [CatalogMatch] {
         let key = Self.albumKey(track)
         if override == nil, let id = albumForKey[key], let songs = albums[id] {
             let local = Self.ranked(songs, for: track)
@@ -58,7 +59,7 @@ actor ITunesLookup {
         var seen = Set<Int>()
         var scored: [CatalogMatch] = []
         var albumIDs: [String: Int] = [:]
-        for query in override.map({ [$0] }) ?? Self.queries(for: track) {
+        for query in (override.map({ [$0] }) ?? Self.queries(for: track)).prefix(maxQueries ?? .max) {
             try Task.checkCancellation()
             var results = try await search(query, country: country)
             if results.isEmpty, country != "in" {
@@ -79,6 +80,12 @@ actor ITunesLookup {
             if albums[id] == nil, let songs = try? await albumTracks(id) { albums[id] = songs }
         }
         return ranked
+    }
+
+    /// Matches from an album already fetched for another song, without searching.
+    func albumMatches(for track: Track) -> [CatalogMatch]? {
+        guard let id = albumForKey[Self.albumKey(track)], let songs = albums[id] else { return nil }
+        return Self.ranked(songs, for: track)
     }
 
     /// Library album identity: album name plus album artist (or artist). Empty when unknown.
@@ -125,13 +132,16 @@ actor ITunesLookup {
 
     /// One request, spaced to stay under Apple's limit; a 403/429 waits a minute and retries once.
     private func fetch(_ url: URL) async throws -> Data {
-        let wait = spacing - Date().timeIntervalSince(lastRequest)
+        // Book the next free slot before waiting, so songs looked up side by side
+        // still keep to Apple's limit.
+        let slot = max(Date(), lastRequest.addingTimeInterval(spacing))
+        lastRequest = slot
+        let wait = slot.timeIntervalSinceNow
         if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
-        lastRequest = Date()
         let (data, response) = try await URLSession.shared.data(from: url)
         if let http = response as? HTTPURLResponse, [403, 429].contains(http.statusCode) {
+            lastRequest = max(lastRequest, Date().addingTimeInterval(60))
             try await Task.sleep(for: .seconds(60))
-            lastRequest = Date()
             return try await URLSession.shared.data(from: url).0
         }
         return data

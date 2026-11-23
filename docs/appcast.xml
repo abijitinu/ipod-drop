@@ -6,17 +6,20 @@
     <description>Updates for iPod Drop</description>
     <language>en</language>
     <item>
-      <title>Version 2.8.1</title>
-      <pubDate>Fri, 20 Nov 2026 18:18:01 +0000</pubDate>
-      <sparkle:version>281</sparkle:version>
-      <sparkle:shortVersionString>2.8.1</sparkle:shortVersionString>
+      <title>Version 2.8.2</title>
+      <pubDate>Mon, 23 Nov 2026 19:24:37 +0000</pubDate>
+      <sparkle:version>282</sparkle:version>
+      <sparkle:shortVersionString>2.8.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.8.1</sparkle:fullReleaseNotesLink>
-      <description><![CDATA[<h3>iPod Drop 2.8.1</h3>
+      <sparkle:fullReleaseNotesLink>https://github.com/abijitinu/ipod-drop/releases/tag/v2.8.2</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[<h3>iPod Drop 2.8.2</h3>
 <ul>
-<li><b>Sync beside your iPod.</b> The Sync button now sits next to the iPod at the top of the sidebar, so updating Never Played and On Repeat is one click away whenever your iPod is connected.</li>
+<li><b>Recently Added playlist.</b> A live playlist on your iPod with your 50 newest songs, next to Never Played and On Repeat. It's on by default; turn it off in Settings.</li>
+<li><b>Pick matches by their cover.</b> In Fix Info, click a match to see every suggestion as a card with its cover art, album, year and length, and pick the right one at a glance.</li>
+<li><b>Faster Fix Info.</b> Albums are looked up side by side, and cover art downloads in parallel when you apply.</li>
+<li><b>Faster saving of cover art.</b> Changing covers rewrites your iPod's artwork files; iPod Drop now checks them once instead of up to six times, so these saves take about a third of the time.</li>
 </ul>]]></description>
-      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.8.1/iPod-Drop-2.8.1.zip" sparkle:edSignature="edYjLRXCBzNMAJoL3ZOGHfzaWvmVLsW/gkTp2qKZCxT6emh3fiUnj6f5nS6BF+uzfnRPcbON5h4eLMZPom09Cw==" length="174715426" type="application/octet-stream"/>
+      <enclosure url="https://github.com/abijitinu/ipod-drop/releases/download/v2.8.2/iPod-Drop-2.8.2.zip" sparkle:edSignature="D2ucGx4Xtmtbk2QiufvCfkG47mavA4ke69tb6R4B75QJaMdIcBKGKHm4x012JgJfyZwQTBudRi5+KX64lIi5CQ==" length="174772291" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>

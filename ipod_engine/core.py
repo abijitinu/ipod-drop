@@ -9,6 +9,7 @@ Ids are only valid within one library generation; clients refetch on `library.ch
 from __future__ import annotations
 
 import logging
+import time
 import os
 import re
 import subprocess
@@ -70,6 +71,7 @@ MARKED_RATING = 20
 AUTO_PLAYLISTS = {
     "neverPlayed": "Never Played",
     "onRepeat": "On Repeat",
+    "recentlyAdded": "Recently Added",
 }
 
 
@@ -78,6 +80,10 @@ def _auto_playlist(key: str) -> SmartPlaylist:
     if key == "neverPlayed":
         rules = SmartRuleGroup(rules=(SmartRule(SmartField.PLAY_COUNT, SmartOperator.IS, 0), music))
         return SmartPlaylist(rules=rules, live_update=True)
+    if key == "recentlyAdded":
+        # The 50 newest songs, so it never empties out between syncs.
+        limit = SmartPlaylistLimit(50, SmartLimitUnit.TRACKS, SmartLimitSort.DATE_ADDED, descending=True)
+        return SmartPlaylist(rules=SmartRuleGroup(rules=(music,)), live_update=True, limit=limit)
     rules = SmartRuleGroup(rules=(SmartRule(SmartField.PLAY_COUNT, SmartOperator.GREATER_THAN, 1), music))
     limit = SmartPlaylistLimit(50, SmartLimitUnit.TRACKS, SmartLimitSort.PLAY_COUNT, descending=True)
     return SmartPlaylist(rules=rules, live_update=True, limit=limit)
@@ -947,6 +953,7 @@ class Engine(QObject):
         active = self.devices.active_ipod
         backup_library(self._mount_path(), active.candidate.display_name if active else "iPod")
         fast_save.reset()
+        self._save_started = time.monotonic()
         self.write = (reply, result)
         self.save_progress.reset()
         self._last_progress = None
@@ -973,8 +980,9 @@ class Engine(QObject):
             # done so the next request doesn't find the iPod busy.
             reply, result = self.write
             self.write = None
-            logger.info("Saved: %d full file reads, %d repeat checks answered from the first read",
-                        fast_save.stats["read"], fast_save.stats["reused"])
+            logger.info("Saved in %.1fs: %d full file reads, %d repeat checks answered from the first read; %s",
+                        time.monotonic() - self._save_started,
+                        fast_save.stats["read"], fast_save.stats["reused"], fast_save.summary())
             self.emit("write.state", {"state": "saved"})
             self._settled.append(lambda: reply(result | {"saved": True}))
             QTimer.singleShot(0, self._release_settled)

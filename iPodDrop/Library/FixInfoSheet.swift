@@ -229,12 +229,49 @@ struct FixInfoSheet: View {
         for index in rows.indices where rows[index].state == .searching { rows[index].state = .waiting }
     }
 
+    /// Songs from one album are looked up one after another, so the first match can
+    /// fetch the album's track list for the rest. Different albums run side by side,
+    /// so one song's wait for a catalogue overlaps another's.
     private func runLookups(albumSizes: [String: Int]) async {
+        var groups: [[Int]] = []
+        var groupForKey: [String: Int] = [:]
         for index in rows.indices {
-            if Task.isCancelled { return }
-            await search(index, albumSize: albumSizes[ITunesLookup.albumKey(rows[index].track)] ?? 1)
+            let key = ITunesLookup.albumKey(rows[index].track)
+            if !key.isEmpty, let group = groupForKey[key] {
+                groups[group].append(index)
+            } else {
+                if !key.isEmpty { groupForKey[key] = groups.count }
+                groups.append([index])
+            }
+        }
+        let queue = AlbumQueue(groups)
+        let workers = (0..<Self.parallelAlbums).map { _ in
+            Task { @MainActor in
+                while let indices = queue.next() {
+                    for index in indices {
+                        if Task.isCancelled { return }
+                        await search(index, albumSize: albumSizes[ITunesLookup.albumKey(rows[index].track)] ?? 1)
+                    }
+                }
+            }
+        }
+        await withTaskCancellationHandler {
+            for worker in workers { await worker.value }
+        } onCancel: {
+            for worker in workers { worker.cancel() }
         }
     }
+
+    /// Albums waiting to be looked up, handed out one at a time.
+    @MainActor
+    private final class AlbumQueue {
+        private var groups: [[Int]]
+        init(_ groups: [[Int]]) { self.groups = groups.reversed() }
+        func next() -> [Int]? { groups.popLast() }
+    }
+
+    /// How many albums are looked up at once.
+    private static let parallelAlbums = 3
 
     fileprivate func search(_ index: Int, query: String? = nil, albumSize: Int = 1) async {
         guard rows.indices.contains(index) else { return }
@@ -242,7 +279,8 @@ struct FixInfoSheet: View {
         do {
             let matches = try await SongLookup.matches(for: rows[index].track, query: query, albumSize: albumSize)
             guard rows.indices.contains(index) else { return }
-            rows[index].matches = Array(matches.prefix(6))
+            rows[index].matches = Array(matches.prefix(8))
+            ThumbnailCache.shared.prefetch(rows[index].matches)
             rows[index].selection = matches.first.map(\.song.id)
             // Only pre-tick confident matches; you decide on the rest.
             rows[index].include = matches.first?.confidence == .high
@@ -269,23 +307,62 @@ struct FixInfoSheet: View {
             let artworkDir = FileManager.default.temporaryDirectory
                 .appending(path: "iPodDrop-artwork-\(UUID().uuidString)", directoryHint: .isDirectory)
             try? FileManager.default.createDirectory(at: artworkDir, withIntermediateDirectories: true)
-            var covers: [URL: String] = [:]  // songs on one album share one download
-            for (n, row) in rowsToApply.enumerated() {
-                guard let picked = row.selected?.song else { continue }
-                let song = await SongLookup.details(for: picked)  // Deezer/MusicBrainz track numbers and genre
-                var item: [String: Any] = ["id": row.track.id, "fields": fields.changes(from: song, to: row.track)]
-                if fields.wantsArtwork(for: row.track), let url = song.artworkURL {
-                    if covers[url] == nil, let (data, response) = try? await URLSession.shared.data(from: url),
-                       (response as? HTTPURLResponse)?.statusCode ?? 200 == 200, NSImage(data: data) != nil {
-                        let file = artworkDir.appending(path: "cover-\(covers.count).jpg")
-                        if (try? data.write(to: file)) != nil { covers[url] = file.path }
-                    }
-                    item["artworkPath"] = covers[url]
+
+            // Full details for the picked songs (Deezer/MusicBrainz track numbers and
+            // genre), several at a time; each catalogue keeps to its own pace.
+            var songs: [String: CatalogSong] = [:]
+            let picked = rowsToApply.compactMap { row in row.selected.map { (row.track.id, $0.song) } }
+            let urls = Set(rowsToApply.compactMap { row in
+                fields.wantsArtwork(for: row.track) ? row.selected?.song.artworkURL : nil
+            })
+            let steps = Double(max(picked.count + urls.count, 1))
+            var finished = 0.0
+            await withTaskGroup(of: (String, CatalogSong).self) { group in
+                for (id, song) in picked { group.addTask { (id, await SongLookup.details(for: song)) } }
+                for await (id, song) in group {
+                    songs[id] = song
+                    finished += 1
+                    downloadFraction = finished / steps
                 }
+            }
+
+            // Each cover once (songs on one album share it), six downloads at a time.
+            var covers: [URL: String] = [:]
+            let wanted = Set(rowsToApply.compactMap { row in
+                fields.wantsArtwork(for: row.track) ? songs[row.track.id]?.artworkURL : nil
+            })
+            await withTaskGroup(of: (URL, String?).self) { group in
+                var running = 0
+                func collect(_ result: (URL, String?)?) {
+                    guard let (url, path) = result else { return }
+                    covers[url] = path
+                    finished += 1
+                    downloadFraction = min(1, finished / steps)
+                }
+                for (n, url) in wanted.enumerated() {
+                    if running >= 6 {
+                        collect(await group.next() ?? nil)
+                        running -= 1
+                    }
+                    let file = artworkDir.appending(path: "cover-\(n).jpg")
+                    group.addTask {
+                        guard let (data, response) = try? await URLSession.shared.data(from: url),
+                              (response as? HTTPURLResponse)?.statusCode ?? 200 == 200, NSImage(data: data) != nil,
+                              (try? data.write(to: file)) != nil else { return (url, nil) }
+                        return (url, file.path)
+                    }
+                    running += 1
+                }
+                for await result in group { collect(result) }
+            }
+
+            for row in rowsToApply {
+                guard let song = songs[row.track.id] else { continue }
+                var item: [String: Any] = ["id": row.track.id, "fields": fields.changes(from: song, to: row.track)]
+                if fields.wantsArtwork(for: row.track), let url = song.artworkURL { item["artworkPath"] = covers[url] }
                 if (item["fields"] as? [String: Any])?.isEmpty == false || item["artworkPath"] != nil {
                     items.append(item)
                 }
-                downloadFraction = Double(n + 1) / Double(rowsToApply.count)
             }
             applyStatus = "Saving to the iPod…"
             let ok = items.isEmpty ? true : await store.editMany(items)
@@ -353,11 +430,11 @@ struct FixInfoSheet: View {
     }
 }
 
-/// One song: what it says now → the suggested match, with alternatives.
+/// One song: what it says now → the suggested match. Click the match (or the
+/// button beside it) to see every match with its cover and pick another.
 private struct FixInfoRow: View {
     @Binding var row: FixInfoSheet.Row
-    @State private var searchingCustom = false
-    @State private var customQuery = ""
+    @State private var picking = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -376,20 +453,31 @@ private struct FixInfoRow: View {
             .frame(width: 300, alignment: .leading)
             Image(systemName: "arrow.right").foregroundStyle(.tertiary)
             suggestion
+                .contentShape(.rect)
+                .onTapGesture { if canPick { picking = true } }
             Spacer(minLength: 0)
             badge
-            menu
+            Button {
+                picking = true
+            } label: {
+                Label(row.matches.count > 1 ? "\(row.matches.count) Matches" : "Choose",
+                      systemImage: "square.grid.2x2")
+                    .font(.callout)
+            }
+            .controlSize(.small)
+            .disabled(!canPick)
+            .help("See every match with its cover art, or search differently")
+            .popover(isPresented: $picking, arrowEdge: .trailing) {
+                MatchPicker(row: $row) { picking = false }
+            }
         }
         .padding(.vertical, 3)
-        .popover(isPresented: $searchingCustom) {
-            HStack {
-                TextField("Search iTunes, Deezer and MusicBrainz", text: $customQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 280)
-                    .onSubmit(runCustom)
-                Button("Search", action: runCustom).disabled(customQuery.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(12)
+    }
+
+    private var canPick: Bool {
+        switch row.state {
+        case .done, .failed: true
+        default: false
         }
     }
 
@@ -407,13 +495,7 @@ private struct FixInfoRow: View {
             if let match = row.selected {
                 let song = match.song
                 HStack(spacing: 8) {
-                    AsyncImage(url: song.artworkURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: 5).fill(.quaternary)
-                    }
-                    .frame(width: 40, height: 40)
-                    .clipShape(.rect(cornerRadius: 5, style: .continuous))
+                    RemoteThumbnail(url: song.thumbnailURL, size: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(song.trackName).lineLimit(1)
                         Text([song.artistName, song.collectionName, song.year.map(String.init),
@@ -422,6 +504,7 @@ private struct FixInfoRow: View {
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
+                .help("Click to see other matches")
             } else {
                 Text("No match found. Try your own search.").font(.callout).foregroundStyle(.secondary)
             }
@@ -438,53 +521,193 @@ private struct FixInfoRow: View {
             }
         }
     }
+}
 
-    private var menu: some View {
-        Menu {
-            if !row.matches.isEmpty {
-                Section("Matches") {
-                    ForEach(row.matches, id: \.song.id) { match in
-                        let song = match.song
-                        Button {
-                            row.selection = song.id
-                            row.include = true
-                        } label: {
-                            Text("\(song.trackName) — \(song.artistName) (\(song.trackTimeMillis.map { Format.duration(ms: $0) } ?? "?"), \(song.source.rawValue))")
-                            if row.selection == song.id { Image(systemName: "checkmark") }
+/// Every match for one song as a card with its cover, so the right album (and its
+/// art) is easy to spot. Also searches with your own words.
+private struct MatchPicker: View {
+    @Binding var row: FixInfoSheet.Row
+    let close: () -> Void
+    @State private var query = ""
+    @State private var searching = false
+
+    private let columns = [GridItem(.adaptive(minimum: 150, maximum: 170), spacing: 14, alignment: .top)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Choose a Match").font(.headline)
+                Text("For “\(row.track.displayTitle)” · \(Format.duration(ms: row.track.lengthMs))")
+                    .font(.callout).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if searching {
+                ProgressView("Searching…")
+                    .frame(maxWidth: .infinity, minHeight: 200)
+            } else if row.matches.isEmpty {
+                Text("No matches. Try searching with the song's name and the artist or film.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                        ForEach(row.matches, id: \.song.id) { match in
+                            card(match)
                         }
                     }
+                    .padding(2)
                 }
+                .frame(height: min(470, CGFloat((row.matches.count + 2) / 3) * 240))
             }
-            Button("Search Differently…") {
-                customQuery = ITunesLookup.queries(for: row.track).last ?? row.track.title
-                searchingCustom = true
+            Divider()
+            HStack(spacing: 8) {
+                TextField("Search iTunes, Deezer and MusicBrainz", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(search)
+                Button("Search", action: search)
+                    .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || searching)
+                Spacer(minLength: 12)
+                Button("Don't Change") {
+                    row.include = false
+                    close()
+                }
+                .help("Leave this song as it is")
             }
-            Button("Don't Change This Song") { row.include = false }
-        } label: {
-            Image(systemName: "ellipsis.circle")
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .font(.callout)
+        .padding(16)
+        .frame(width: 560)
+        .onAppear { query = ITunesLookup.queries(for: row.track).last ?? row.track.title }
     }
 
-    private func runCustom() {
-        let query = customQuery.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return }
-        searchingCustom = false
-        row.state = .searching
+    private func card(_ match: CatalogMatch) -> some View {
+        let song = match.song
+        let isSelected = row.selection == song.id
+        return Button {
+            row.selection = song.id
+            row.include = true
+            close()
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                RemoteThumbnail(url: song.thumbnailURL, size: 150)
+                    .overlay(alignment: .topTrailing) {
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, Color.brand)
+                                .shadow(radius: 2)
+                                .padding(6)
+                        }
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song.trackName).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text(song.artistName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text([song.collectionName, song.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    HStack(spacing: 5) {
+                        lengthLabel(song)
+                        Text(song.source.rawValue)
+                        Spacer(minLength: 0)
+                        Circle().fill(color(match.confidence)).frame(width: 7, height: 7)
+                    }
+                    .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .padding(6)
+            .background(isSelected ? Color.brand.opacity(0.14) : .clear, in: .rect(cornerRadius: 10, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help("\(song.trackName) — \(song.artistName)\n\(song.collectionName ?? "")")
+    }
+
+    /// The match's length, green when it's within 2 seconds of your song.
+    private func lengthLabel(_ song: CatalogSong) -> some View {
+        let ms = song.trackTimeMillis
+        let close = ms.map { abs($0 - row.track.lengthMs) <= 2000 } ?? false
+        return Text(ms.map { Format.duration(ms: $0) } ?? "?:??")
+            .monospacedDigit()
+            .foregroundStyle(close ? Color.green : .secondary)
+    }
+
+    private func color(_ confidence: CatalogMatch.Confidence) -> Color {
+        switch confidence {
+        case .high: .green
+        case .medium: .orange
+        case .low: .red
+        }
+    }
+
+    private func search() {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty, !searching else { return }
+        searching = true
         let track = row.track
         Task {
             do {
-                let matches = try await SongLookup.matches(for: track, query: query)
-                row.matches = Array(matches.prefix(6))
+                let matches = try await SongLookup.matches(for: track, query: text)
+                row.matches = Array(matches.prefix(8))
+                ThumbnailCache.shared.prefetch(row.matches)
                 row.selection = matches.first?.song.id
                 row.include = matches.first != nil
                 row.state = .done
             } catch {
                 row.state = .failed(error.localizedDescription)
             }
+            searching = false
+        }
+    }
+}
+
+/// Catalogue cover thumbnails, cached for the session so pickers open instantly.
+@MainActor
+final class ThumbnailCache {
+    static let shared = ThumbnailCache()
+    private let cache = NSCache<NSURL, NSImage>()
+    private var loading: [URL: Task<NSImage?, Never>] = [:]
+
+    func image(for url: URL) async -> NSImage? {
+        if let image = cache.object(forKey: url as NSURL) { return image }
+        if let task = loading[url] { return await task.value }
+        let task = Task<NSImage?, Never> {
+            guard let (data, response) = try? await URLSession.shared.data(from: url),
+                  (response as? HTTPURLResponse)?.statusCode ?? 200 == 200 else { return nil }
+            return NSImage(data: data)
+        }
+        loading[url] = task
+        let image = await task.value
+        loading[url] = nil
+        if let image { cache.setObject(image, forKey: url as NSURL) }
+        return image
+    }
+
+    /// Start loading the covers of these matches in the background.
+    func prefetch(_ matches: [CatalogMatch]) {
+        for url in Set(matches.compactMap(\.song.thumbnailURL)) {
+            Task { _ = await image(for: url) }
+        }
+    }
+}
+
+/// A catalogue cover, loaded through `ThumbnailCache`.
+struct RemoteThumbnail: View {
+    let url: URL?
+    let size: CGFloat
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Image(systemName: "music.note").foregroundStyle(.tertiary).font(.system(size: size * 0.3))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(.rect(cornerRadius: max(5, size * 0.05), style: .continuous))
+        .task(id: url) {
+            image = nil
+            if let url { image = await ThumbnailCache.shared.image(for: url) }
         }
     }
 }

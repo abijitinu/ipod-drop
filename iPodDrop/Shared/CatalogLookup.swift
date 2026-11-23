@@ -28,6 +28,17 @@ nonisolated struct CatalogSong: Hashable, Identifiable, Sendable {
     var needsDetails = false
     /// Source-specific ids used to fetch those details.
     var detailIDs: [String] = []
+
+    /// A small version of the cover for lists and pickers: quick to load.
+    var thumbnailURL: URL? {
+        guard let url = artworkURL?.absoluteString else { return nil }
+        let small = switch source {
+        case .itunes: url.replacingOccurrences(of: "600x600bb", with: "200x200bb")
+        case .deezer: url.replacingOccurrences(of: "1000x1000", with: "250x250").replacingOccurrences(of: "500x500", with: "250x250")
+        case .musicBrainz: url.replacingOccurrences(of: "front-500", with: "front-250")
+        }
+        return URL(string: small)
+    }
 }
 
 /// A scored suggestion for one song in the library.
@@ -65,9 +76,21 @@ nonisolated enum SongLookup {
             }
         }
 
-        try await attempt { try await ITunesLookup.shared.matches(for: track, query: query, albumSize: albumSize) }
-        if !good { try await attempt { try await DeezerLookup.shared.matches(for: track, query: query) } }
-        if !good { try await attempt { try await MusicBrainzLookup.shared.matches(for: track, query: query) } }
+        if query == nil, let local = await ITunesLookup.shared.albumMatches(for: track), local.first?.confidence == .high {
+            // Another song from this album already matched; its track list answers this one.
+            found = local
+        } else {
+            // Deezer answers in well under a second, while iTunes allows one search every
+            // 3 seconds. Asking Deezer first means a song it already knows costs one iTunes
+            // search instead of up to four; iTunes still wins when both match equally well.
+            try await attempt { try await DeezerLookup.shared.matches(for: track, query: query) }
+            let deezerFound = good
+            try await attempt {
+                try await ITunesLookup.shared.matches(for: track, query: query, albumSize: albumSize,
+                                                      maxQueries: deezerFound ? 1 : nil)
+            }
+            if !good { try await attempt { try await MusicBrainzLookup.shared.matches(for: track, query: query) } }
+        }
 
         if found.isEmpty, failures.count == CatalogSong.Source.allCases.count, let error = failures.first {
             throw error
@@ -126,6 +149,15 @@ actor DeezerLookup {
     private var lastRequest = Date.distantPast
     private let spacing: TimeInterval = 0.2  // Deezer allows 50 requests per 5 seconds
 
+    /// Books the next free request slot before waiting for it, so songs looked up side
+    /// by side still keep to the catalogue's limit.
+    private func waitForTurn() async throws {
+        let slot = max(Date(), lastRequest.addingTimeInterval(spacing))
+        lastRequest = slot
+        let wait = slot.timeIntervalSinceNow
+        if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
+    }
+
     func matches(for track: Track, query override: String? = nil) async throws -> [CatalogMatch] {
         let (title, artist) = SongLookup.titleAndArtist(track)
         var queries: [String] = []
@@ -180,9 +212,7 @@ actor DeezerLookup {
     }
 
     private func get(_ url: String) async throws -> Data {
-        let wait = spacing - Date().timeIntervalSince(lastRequest)
-        if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
-        lastRequest = Date()
+        try await waitForTurn()
         guard let url = URL(string: url) else { throw URLError(.badURL) }
         return try await URLSession.shared.data(from: url).0
     }
@@ -228,6 +258,15 @@ actor MusicBrainzLookup {
 
     private var lastRequest = Date.distantPast
     private let spacing: TimeInterval = 1.1
+
+    /// Books the next free request slot before waiting for it, so songs looked up side
+    /// by side still keep to the catalogue's limit.
+    private func waitForTurn() async throws {
+        let slot = max(Date(), lastRequest.addingTimeInterval(spacing))
+        lastRequest = slot
+        let wait = slot.timeIntervalSinceNow
+        if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
+    }
     private static let userAgent: String = {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2"
         return "iPodDrop/\(version) ( https://github.com/abijitinu/ipod-drop )"
@@ -336,9 +375,7 @@ actor MusicBrainzLookup {
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         for attempt in 0..<4 {
-            let wait = spacing - Date().timeIntervalSince(lastRequest)
-            if wait > 0 { try await Task.sleep(for: .seconds(wait)) }
-            lastRequest = Date()
+            try await waitForTurn()
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 200
             if status == 503 || status == 429, attempt < 3 {

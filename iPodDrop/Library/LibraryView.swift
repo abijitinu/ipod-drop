@@ -291,7 +291,7 @@ private struct Sidebar: View {
         }
     }
 
-    /// Beside the iPod: brings "Never Played" and "On Repeat" up to date from the latest
+    /// Beside the iPod: brings "Recently Added", "Never Played" and "On Repeat" up to date from the latest
     /// listening (turning them on the first time).
     private var syncButton: some View {
         Button {
@@ -310,7 +310,7 @@ private struct Sidebar: View {
         }
         .buttonStyle(.borderless)
         .disabled(store.editBlocker != nil || store.isBusy || store.syncingPlaylists)
-        .help("Sync: update “Never Played” and “On Repeat” on the iPod from your latest listening")
+        .help("Sync: update “Recently Added”, “Never Played” and “On Repeat” on the iPod")
     }
 
     private func libraryRow(_ title: String, _ symbol: String, _ item: SidebarItem, tracks: [Track],
@@ -516,7 +516,7 @@ private struct LibraryDialogs: ViewModifier {
 }
 
 /// A playlist in the sidebar; accepts songs dragged from the table and files from Finder.
-/// "Never Played" or "On Repeat": live playlists the iPod keeps from your listening
+/// "Recently Added", "Never Played" or "On Repeat": live playlists the iPod keeps from your listening
 /// (turned on in Settings). They fill themselves, so there's nothing to drop or rename.
 private struct AutoPlaylistRow: View {
     private let store = LibraryStore.shared
@@ -524,11 +524,17 @@ private struct AutoPlaylistRow: View {
 
     var body: some View {
         let tracks = store.tracks(in: playlist)
-        let neverPlayed = playlist.name == LibraryStore.autoPlaylistNames["neverPlayed"]
-        Label(playlist.name, systemImage: neverPlayed ? "sparkles" : "repeat")
+        let (symbol, help) = switch playlist.name {
+        case LibraryStore.autoPlaylistNames["neverPlayed"]:
+            ("sparkles", "Songs you haven't played yet. The iPod updates this as you listen.")
+        case LibraryStore.autoPlaylistNames["recentlyAdded"]:
+            ("clock.badge", "Your 50 newest songs. The iPod updates this as songs are added.")
+        default:
+            ("repeat", "Your 50 most played songs. The iPod updates this as you listen.")
+        }
+        Label(playlist.name, systemImage: symbol)
             .badge(tracks.count)
-            .help(neverPlayed ? "Songs you haven't played yet. The iPod updates this as you listen."
-                              : "Your 50 most played songs. The iPod updates this as you listen.")
+            .help(help)
             .contextMenu {
                 Button("Play", systemImage: "play.fill") {
                     PlayerController.shared.shuffle = false

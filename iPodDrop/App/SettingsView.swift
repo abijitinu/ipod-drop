@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage(LibraryStore.keepRemovedCopiesKey) private var keepRemovedCopies = true
     @AppStorage(LibraryStore.neverPlayedKey) private var neverPlayed = false
     @AppStorage(LibraryStore.onRepeatKey) private var onRepeat = false
+    @AppStorage(LibraryStore.recentlyAddedKey) private var recentlyAdded = true
     @State private var autoUpdate = AppDelegate.shared?.updater.updater.automaticallyChecksForUpdates ?? true
 
     var body: some View {
@@ -33,6 +34,7 @@ struct SettingsView: View {
                 Text("Rate a song 1 star on your iPod to mark it. It appears in the playlist right away so you can listen again and change your mind. When the iPod connects, iPod Drop offers to remove marked songs (songs on your Mac are never touched).")
             }
             Section {
+                Toggle("“Recently Added”: your 50 newest songs", isOn: $recentlyAdded)
                 Toggle("“Never Played”: songs you haven’t listened to yet", isOn: $neverPlayed)
                 Toggle("“On Repeat”: the 50 songs you play most", isOn: $onRepeat)
             } header: {
@@ -42,6 +44,7 @@ struct SettingsView: View {
             }
             .onChange(of: neverPlayed) { Task { await store.syncAutoPlaylists() } }
             .onChange(of: onRepeat) { Task { await store.syncAutoPlaylists() } }
+            .onChange(of: recentlyAdded) { Task { await store.syncAutoPlaylists() } }
             Section {
                 Toggle("Check for updates automatically", isOn: $autoUpdate)
                     .onChange(of: autoUpdate) { _, on in
